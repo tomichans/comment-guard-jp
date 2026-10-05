@@ -37,21 +37,23 @@
 
 ## 3. リレーション（外部キー）
 
-| 子テーブル.列 | 参照先 | 必須／任意 |
-| --- | --- | --- |
-| `videos.user_id` | `users.id` | 任意（`guest_id` と排他） |
-| `videos.source_id` | `sources.id` | 必須 |
-| `comments.video_id` | `videos.id` | 必須 |
-| `comments.parent_comment_id` | `comments.id`（自己参照） | 任意 |
-| `comment_analysis.comment_id` | `comments.id` | 必須 |
-| `comment_analysis.group_id` | `comment_groups.id` | 任意 |
-| `comment_groups.video_id` | `videos.id` | 必須 |
-| `advice_logs.video_id` | `videos.id` | 必須 |
-| `advice_logs.user_id` | `users.id` | 任意 |
-| `users.id` | `auth.users.id` | 必須 |
+| 子テーブル.列 | 参照先 | 必須／任意 | ON DELETE |
+| --- | --- | --- | --- |
+| `videos.user_id` | `users.id` | 任意（`guest_id` と排他） | CASCADE |
+| `videos.source_id` | `sources.id` | 必須 | RESTRICT |
+| `comments.video_id` | `videos.id` | 必須 | CASCADE |
+| `comments.parent_comment_id` | `comments.id`（自己参照） | 任意 | CASCADE |
+| `comment_analysis.comment_id` | `comments.id` | 必須 | CASCADE |
+| `comment_analysis.group_id` | `comment_groups.id` | 任意 | SET NULL |
+| `comment_groups.video_id` | `videos.id` | 必須 | CASCADE |
+| `advice_logs.video_id` | `videos.id` | 必須 | CASCADE |
+| `advice_logs.user_id` | `users.id` | 任意 | CASCADE |
+| `users.id` | `auth.users.id` | 必須 | CASCADE |
 
 - `videos.guest_id` と `advice_logs.guest_id` は外部キーを持たない。
-- 各外部キーの `ON DELETE` 挙動は【未決定】（第7章参照）。
+- `ON DELETE` は【確定】。動画やユーザーを削除すると、それに属するデータが連鎖して削除される。
+  - ゲストの24時間削除ジョブは、期限切れの `videos` 行を削除すれば、子テーブルも連鎖して削除される。
+  - 例外は2つ。`videos.source_id` は RESTRICT（動画が残っている媒体は削除できない）、`comment_analysis.group_id` は SET NULL（グループが消えても分析結果は残す）。
 
 ### 関係の補足
 
@@ -141,6 +143,7 @@ CHECK (
 
 - ゲストの24時間削除ジョブは、`guest_id IS NOT NULL` かつ `created_at` が24時間を超えた行を対象にする。
 - ログイン後の引継ぎは `UPDATE videos SET user_id = 新user_id, guest_id = NULL WHERE guest_id = Cookieの値`。
+- 同じユーザーが同じ動画を複数回登録してもよい（`user_id` ＋ `source_id` ＋ `video_id` のユニーク制約は設けない）【確定】。
 
 ### 5.2 comments（コメント本体）
 
@@ -178,25 +181,17 @@ CHECK (
 | `ng_words` | text[] | no |  | 実際にヒットしたNGワードの一覧 |
 | `score` | numeric(3,2) | no |  | `primary_category` の判定確信度（0.00〜1.00） |
 | `review_required` | boolean | no | | 人のレビューが必要か（条件は要件定義書9.2） |
-| `group_id` | uuid | no | → `comment_groups.id` | 所属グループ。指摘・要望／質問の対象外のコメントは `NULL` |
+| `group_id` | uuid | no | → `comment_groups.id` | 所属グループ。グループ対象外のコメント（`harmful` / `spam` を含む）は `NULL`。1コメントにつき最大1グループ |
 | `embedding` | vector(1536) | no |  | コメント本文のEmbedding変換後の値（`text-embedding-3-small`）。対象外は `NULL` |
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 
-**【要確認・実装しない】以下の列は要件定義書に記載がない**
-
-| カラム | 型 | 必須 | 説明 |
-| --- | --- | --- | --- |
-| `actionable_flag` | boolean | no | 建設的指摘が含まれるか |
-| `actionable_score` | numeric(3,2) | no | `actionable_flag` の確信度（0.00〜1.00） |
-| `actionable_reason` | text | no | 判定根拠の短文（例：「具体例あり」） |
-
-- 要件定義書10.1では、抽出対象を `primary_category` と `labels` で決めている。そのため上記3列は不要の可能性が高い。残すか削除するか確認が取れるまで作成しない。
+- `actionable_flag`、`actionable_score`、`actionable_reason` は持たない【確定】。建設的な指摘の抽出は、`primary_category` と `labels` で行う（要件定義書10.1）。
 
 **運用ルール（確定）**
 
 - 再分析時は、既存行を `is_latest = false` に更新し、新しい結果を `is_latest = true` で新規INSERTする。履歴は削除しない。
 - 現在の分析結果は、常に `WHERE comment_id = X AND is_latest = true` で取得する。
-- `embedding` は、`primary_category` が `feedback` / `question`、または `labels` に `request` を含む場合のみ生成する。
+- `embedding` は、要件定義書10.1のグループ対象になるコメントのみ生成する（`harmful` / `spam` は対象外）。
 
 ### 5.4 comment_groups（類似コメントのグループ）
 
@@ -214,6 +209,8 @@ CHECK (
 | `updated_at` | timestamptz | yes |  | レコード更新日時 |
 
 - 類似度の閾値は0.82。LLMは、新規グループ作成時の `representative_text` 生成にのみ使う。
+- `representative_embedding` は、既存グループへの合流時に更新しない【確定】。
+- 1コメントが所属するグループは1つだけ。`primary_category = 'question'` なら `question`、それ以外で `feedback` または `labels` に `request` を含めば `feedback_request`（要件定義書10.1）。
 
 ### 5.5 ng_words（NGワード辞書）
 
@@ -290,6 +287,8 @@ CHECK (
 | --- | --- | --- | --- | --- |
 | `idx_comment_analysis_latest` | `comment_analysis` | `comment_id`, `is_latest` | 複合 | 「現在の分析結果」の取得を高速化する |
 | `idx_videos_guest_id_unique` | `videos` | `guest_id` | 部分ユニーク | ゲストの1動画制限をDBレベルでも保証する |
+| `idx_comments_video_external_unique` | `comments` | `video_id`, `external_comment_id` | 複合ユニーク | 同じコメントの重複登録を防ぐ（要件定義書7.4） |
+| `idx_comment_analysis_latest_unique` | `comment_analysis` | `comment_id`（`WHERE is_latest`） | 部分ユニーク | 同じコメントで最新の分析結果を1行に保つ |
 
 ```sql
 -- ゲストの1動画制限をDBレベルでも保証する
@@ -298,12 +297,25 @@ ON videos(guest_id)
 WHERE guest_id IS NOT NULL;
 ```
 
+```sql
+-- 同じコメントの重複登録を防ぐ
+CREATE UNIQUE INDEX idx_comments_video_external_unique
+ON comments(video_id, external_comment_id);
+
+-- 同じコメントで is_latest = true の行を1つだけにする
+CREATE UNIQUE INDEX idx_comment_analysis_latest_unique
+ON comment_analysis(comment_id)
+WHERE is_latest;
+```
+
+- `external_comment_id` が `NULL` の行は、PostgreSQLの仕様上、ユニーク制約の対象にならない。
+
 ### 6.2 FK列のインデックス
 
 | テーブル | 対象列 |
 | --- | --- |
 | `videos` | `user_id`, `source_id` |
-| `comments` | `video_id`, `parent_comment_id` |
+| `comments` | `parent_comment_id`（`video_id` は6.1のユニークインデックスの先頭列で対応） |
 | `comment_analysis` | `group_id`（`comment_id` は6.1の複合インデックスで対応） |
 | `comment_groups` | `video_id` |
 | `advice_logs` | `video_id`, `user_id` |
@@ -314,8 +326,6 @@ WHERE guest_id IS NOT NULL;
 
 ### 7.1 未決定
 
-- 各外部キーの `ON DELETE` 挙動（`CASCADE` / `RESTRICT` など）
-  - ゲストデータの24時間削除ジョブが、子テーブル（`comments`、`comment_analysis`、`comment_groups`、`advice_logs`）まで削除する必要がある。`CASCADE` にするか、ジョブ側で明示的に削除するかを決める。
 - `ng_words` の有効／無効の管理
 - `users` とSupabase Authの同期方式、追加のプロフィール項目
 - `videos` の追加項目
@@ -323,7 +333,4 @@ WHERE guest_id IS NOT NULL;
 
 ### 7.2 要確認
 
-1. `comment_analysis.actionable_flag` / `actionable_score` / `actionable_reason`：残すか、削除するか（5.3参照）。
-2. コメントの重複防止：要件定義書7.4の「同じYouTubeコメントIDは重複登録しない」を、DBの制約（`comments` の `(video_id, external_comment_id)` のユニーク制約）で保証するか。
-3. 最新の分析結果の保証：同じコメントで `is_latest = true` の行が1つだけになるよう、部分ユニークインデックス（`comment_analysis(comment_id) WHERE is_latest`）を張るか。
-4. 同じユーザーが同じ動画を重複して登録できるか（`videos` の `user_id` ＋ `source_id` ＋ `video_id` のユニーク制約の要否）。
+現在、要確認の事項はない。
