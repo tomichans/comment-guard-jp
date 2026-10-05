@@ -266,6 +266,7 @@ advice_logsへ保存
 - YouTube Data API を利用する。
 - `videos` テーブルに保存する項目：媒体種別、媒体側動画ID、動画タイトル、サムネイルURL、公開日時、作成日時
 - 追加項目は【未決定】。
+- 同じユーザーが同じ動画を複数回登録してもよい。重複登録を禁止するユニーク制約は設けない【確定】。ただしゲストは3.1の「同時に1動画」の制限を受ける。
 
 ---
 
@@ -288,7 +289,7 @@ advice_logsへ保存
 
 ### 7.4 重複防止と再分析
 
-- 同じYouTubeコメントIDを持つコメントは重複登録しない。
+- 同じYouTubeコメントIDを持つコメントは重複登録しない。DBの制約でも保証する（`comments` の `(video_id, external_comment_id)` にユニーク制約。テーブル定義書6.1参照）。
 - 再取得時の扱いは次のとおり。
   - 新規コメント：分析対象
   - 既存コメントの内容変更：再分析対象
@@ -417,10 +418,13 @@ advice_logsへ保存
 
 コメント分析結果から、動画改善につながる可能性があるコメントを抽出し、類似する論点をグルーピングして提示する。
 
-### 10.1 抽出対象
+### 10.1 抽出対象【確定】
 
-- `group_type = 'feedback_request'`：`primary_category = 'feedback'` または `labels` に `'request'` を含む
-- `group_type = 'question'`：`primary_category = 'question'`
+- `harmful` と `spam` のコメントは、グループとランキングの対象にしない（`labels` に `request` を含んでいても除外する）。
+- 1コメントが所属できるグループは最大1つ。次の順に判定する。
+  1. `primary_category = 'question'` → `group_type = 'question'`
+  2. 上記以外で、`primary_category = 'feedback'` または `labels` に `'request'` を含む → `group_type = 'feedback_request'`
+  3. 上記のどちらにも該当しない → グループなし（`group_id = NULL`。embeddingも生成しない）
 
 ### 10.2 グルーピング方式【確定】
 
@@ -438,6 +442,7 @@ OpenAI Embedding と、コサイン類似度による判定。
 3. 類似度が 0.82 以上なら、既存グループに合流する（`comment_count += 1`）。
 4. 類似度が 0.82 未満なら、新規グループを作成する。
    - 軽量LLMで `representative_text`（代表論点）を生成する。
+   - `representative_embedding` には、そのコメントのembeddingをそのまま格納する。合流時（手順3）には更新しない【確定】。
    - 例：「音が小さい」「声が聞き取りづらい」「BGMに対してナレーションが小さい」 → 「音声・ナレーションが聞き取りづらい」
 5. `comment_analysis.group_id` を確定する。
 
@@ -474,10 +479,11 @@ comment_analysis
 - いいね数
 - 新しさ
 
+表示件数は、どちらのランキングも1〜3位まで【確定】。
+
 次の項目は【未決定】。
 
 - 具体的な計算式（いいね数と新しさの重み付け）
-- 表示件数（4.4では1〜3位としている。第20章参照）
 - 同率順位の扱い
 
 ---
@@ -570,7 +576,7 @@ comment_analysis
 - 再分析履歴は `is_latest` フラグ方式。
   - 再分析時は既存行を `is_latest = false` に更新し、新しい結果を `is_latest = true` で新規INSERTする（履歴は削除しない）。
   - 現在の分析結果は常に `WHERE comment_id = X AND is_latest = true` で取得する。
-- `embedding` は、`primary_category` が `feedback` / `question`、または `labels` に `request` を含む場合のみ生成する。対象外は null のまま保存する。
+- `embedding` は、10.1のグループ対象になるコメント（`harmful` / `spam` を除き、`primary_category` が `question` または `feedback`、もしくは `labels` に `request` を含むもの）の場合のみ生成する。対象外は null のまま保存する。
 - NGワードのヒット結果は、`comment_analysis.ng_words`（`text[]`）にヒットした単語を配列でそのまま保存する簡易方式（中間テーブルは作らない）。
 
 #### advice_logs
@@ -612,7 +618,25 @@ erDiagram
 
 - `guest_id` はFKを持たない（Cookieで発行したUUID）。
 - `ng_words` は他テーブルとFKを持たない。
-- 各FKの `ON DELETE` 挙動は【未決定】（ゲストデータの24時間削除と関係する。第20章参照）。
+
+### 13.4 各FKのON DELETE【確定】
+
+動画やユーザーを削除すると、それに属するデータが連鎖して削除される設計とする（ゲストデータの24時間削除とアカウント削除を、親の1行の削除で済ませるため）。
+
+| FK | ON DELETE |
+| --- | --- |
+| `videos.user_id` → `users.id` | CASCADE |
+| `videos.source_id` → `sources.id` | RESTRICT |
+| `comments.video_id` → `videos.id` | CASCADE |
+| `comments.parent_comment_id` → `comments.id` | CASCADE |
+| `comment_analysis.comment_id` → `comments.id` | CASCADE |
+| `comment_analysis.group_id` → `comment_groups.id` | SET NULL |
+| `comment_groups.video_id` → `videos.id` | CASCADE |
+| `advice_logs.video_id` → `videos.id` | CASCADE |
+| `advice_logs.user_id` → `users.id` | CASCADE |
+| `users.id` → `auth.users.id` | CASCADE |
+
+- ゲストの24時間削除ジョブは、期限切れの `videos` 行を削除すれば、`comments`、`comment_analysis`、`comment_groups`、`advice_logs` も連鎖して削除される。
 
 ---
 
@@ -718,7 +742,7 @@ erDiagram
 ## 18. データ保持
 
 - **ゲスト**：24時間で削除する（3.1参照）【確定】
-- **ログインユーザー**：原則としてユーザーが削除するまで保持する案がある。動画単位の削除、アカウント削除時の関連データ削除も案の段階【未決定】。
+- **ログインユーザー**：原則としてユーザーが削除するまで保持する案がある。動画単位の削除やアカウント削除の画面・操作は案の段階【未決定】。削除された場合の関連データの連鎖削除は13.4で確定。
 
 ---
 
@@ -748,8 +772,7 @@ erDiagram
 - Supabase Auth と `users` の同期方式（13.2）
 - 処理の非同期化方法（特に、7.2の「残りをバックグラウンド取得」の実現方法）（5章、17.1）
 - アドバイスの生成条件（5章）
-- ランキングの計算式、表示件数、同率順位の扱い（11章）
-- 各FKの `ON DELETE` 挙動（13.3）
+- ランキングの計算式、同率順位の扱い（11章）
 - `ng_words` の管理機能（有効／無効の切り替えなど）（9.2）
 - コメント分類・NG判定・アドバイス生成に使う具体的なモデル、NG判定の利用サービス（14.1、19）
 - 月間利用量の制限（14.2）
@@ -759,14 +782,11 @@ erDiagram
 - ログの保持期間と記録先（17.2）
 - ログインユーザーのデータ保持と削除の扱い（18）
 
-### 20.2 原文に矛盾・曖昧さがあり、確認が必要なもの
+### 20.2 原文に曖昧さがあり、確認が必要なもの
 
-1. **ランキングの表示件数**：4.4では「1〜3位まで表示」としているが、11章では「表示件数は未定」。
-2. **グループが重複する場合**：`primary_category = 'question'` かつ `labels` に `request` を含むコメントは、`feedback_request` と `question` の両方の対象になる（10.1）。一方、`comment_analysis.group_id` は1つしか持てない。どちらを優先するか未記載。
-3. **harmful・spam のコメントの扱い**：10.1の抽出条件（`labels` に `request` を含む）だと、`primary_category` が `harmful` / `spam` のコメントもグループとランキングに入りうる。除外するかどうか未記載。
-4. **`representative_embedding` の中身**：新規グループ作成時、最初のコメントのembeddingか、代表テキストのembeddingか。合流時に更新するかも未記載。
-5. **`comment_count` の更新**：再分析でコメントのグループ所属が変わった場合に、増減をどう扱うか未記載。
-6. **`review_required` の用途**：立てる条件（9.2）はあるが、UIでの扱いが未記載。
-7. **ゲストの利用量制限**：現在は「同時1動画」「100スレッド」のみ。Cookieを削除すれば新しいゲストになれるため、IP単位などの上限（16章のレート制限）と、1日あたりの分析回数の上限が必要かどうか。
-8. **API使用量の記録先**：8テーブルが正式構成のため、使用量を専用テーブルで持つか、ログ出力にとどめるか。
-9. **ゲストのデータ削除**：24時間削除のジョブが子テーブル（`comments`、`comment_analysis`、`comment_groups`、`advice_logs`）まで削除するには、`ON DELETE CASCADE` 相当が事実上必要になる。
+1. **`comment_count` の更新**：再分析でコメントのグループ所属が変わった場合に、増減をどう扱うか未記載。
+2. **`review_required` の用途**：立てる条件（9.2）はあるが、UIでの扱いが未記載。
+3. **ゲストの利用量制限**：現在は「同時1動画」「100スレッド」のみ。Cookieを削除すれば新しいゲストになれるため、IP単位などの上限（16章のレート制限）と、1日あたりの分析回数の上限が必要かどうか。
+4. **API使用量の記録先**：8テーブルが正式構成のため、使用量を専用テーブルで持つか、ログ出力にとどめるか。
+
+（解決済み：グループの重複、harmful・spam の扱い、ランキングの表示件数、`representative_embedding` の中身、ゲスト削除と CASCADE。それぞれ 10.1、11章、10.3、13.4 に反映済み。）
