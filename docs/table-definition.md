@@ -13,7 +13,7 @@
 - DB：Supabase PostgreSQL
 - 主キー `id` は `uuid`（`DEFAULT gen_random_uuid()`）
 - 日時の列は `timestamptz`（タイムゾーン付き）とする。
-  - 理由：ゲストデータの24時間削除など、時刻の比較があるため。
+  - 理由：期限切れデータの削除など、時刻の比較があるため。
 - `created_at` は `DEFAULT now()`
 - `vector` 型を使うため、拡張 `vector`（pgvector）を有効化する。
 - ゲスト用の `guest_id` はCookieで発行するUUIDで、外部キーを持たない。
@@ -52,7 +52,7 @@
 
 - `videos.guest_id` と `advice_logs.guest_id` は外部キーを持たない。
 - `ON DELETE` は【確定】。動画やユーザーを削除すると、それに属するデータが連鎖して削除される。
-  - ゲストの24時間削除ジョブは、期限切れの `videos` 行を削除すれば、子テーブルも連鎖して削除される。
+  - 期限切れ削除ジョブは、期限切れの `videos` 行を削除すれば、子テーブルも連鎖して削除される。
   - 例外は2つ。`videos.source_id` は RESTRICT（動画が残っている媒体は削除できない）、`comment_analysis.group_id` は SET NULL（グループが消えても分析結果は残す）。
 
 ### 関係の補足
@@ -127,7 +127,7 @@
 | `source_id` | uuid | yes | → `sources.id` | 媒体 |
 | `video_id` | text | yes | （YouTube側の外部ID） | APIで取得した動画ID。内部の `id` とは別物 |
 | `title` | text | yes |  | 動画タイトル |
-| `thumbnail_url` | text | no |  | サムネイルURL |
+| `thumbnail_url` | text | no |  | サムネイルURL（URLのみ保存し、画像ファイルは保存しない） |
 | `published_at` | timestamptz | no |  | 公開日時 |
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 
@@ -141,7 +141,8 @@ CHECK (
 )
 ```
 
-- ゲストの24時間削除ジョブは、`guest_id IS NOT NULL` かつ `created_at` が24時間を超えた行を対象にする。
+- 期限切れ削除ジョブ（要件定義書3.3）は、`guest_id IS NOT NULL` の行は `created_at` から24時間、`user_id IS NOT NULL` の行は `created_at` から29日を超えたものを対象にする。
+- `created_at` は、引継ぎ（`UPDATE`）や再分析では更新しない。保持期間は定数 `GUEST_RETENTION_HOURS`（初期値24）と `USER_RETENTION_DAYS`（初期値29）で管理する。
 - ログイン後の引継ぎは `UPDATE videos SET user_id = 新user_id, guest_id = NULL WHERE guest_id = Cookieの値`。
 - 同じユーザーが同じ動画を複数回登録してもよい（`user_id` ＋ `source_id` ＋ `video_id` のユニーク制約は設けない）【確定】。
 
@@ -289,6 +290,7 @@ CHECK (
 | `idx_videos_guest_id_unique` | `videos` | `guest_id` | 部分ユニーク | ゲストの1動画制限をDBレベルでも保証する |
 | `idx_comments_video_external_unique` | `comments` | `video_id`, `external_comment_id` | 複合ユニーク | 同じコメントの重複登録を防ぐ（要件定義書7.4） |
 | `idx_comment_analysis_latest_unique` | `comment_analysis` | `comment_id`（`WHERE is_latest`） | 部分ユニーク | 同じコメントで最新の分析結果を1行に保つ |
+| `idx_videos_created_at` | `videos` | `created_at` | 通常 | 期限切れ削除ジョブの検索を高速化する |
 
 ```sql
 -- ゲストの1動画制限をDBレベルでも保証する
@@ -306,6 +308,12 @@ ON comments(video_id, external_comment_id);
 CREATE UNIQUE INDEX idx_comment_analysis_latest_unique
 ON comment_analysis(comment_id)
 WHERE is_latest;
+```
+
+```sql
+-- 期限切れ削除ジョブの検索用
+CREATE INDEX idx_videos_created_at
+ON videos(created_at);
 ```
 
 - `external_comment_id` が `NULL` の行は、PostgreSQLの仕様上、ユニーク制約の対象にならない。
