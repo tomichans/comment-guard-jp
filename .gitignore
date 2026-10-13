@@ -24,6 +24,3 @@ npm-debug.log*
 # vercel
 .vercel
 
-# Supabase CLI がローカル実行時に作る一時ファイル
-supabase/.branches
-supabase/.temp
