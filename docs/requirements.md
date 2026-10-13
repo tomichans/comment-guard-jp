@@ -178,7 +178,10 @@ YouTubeのAPIから取得したデータは、YouTube API Services の規約に�
 - 起点：`videos.created_at`。コメントの再取得や再分析では延長しない。
 - 適用する期間：`guest_id IS NOT NULL` の動画にはゲストの期間、`user_id IS NOT NULL` の動画にはログインユーザーの期間を適用する。
 - ゲストからログインへの引継ぎ時：`created_at` は変えず、引継ぎ後はログインユーザーの期間が適用される。
-- 削除方法：1時間ごとに実行する定期ジョブ（スケジュール方式は実装時に選ぶ）が、期限を超えた `videos` 行を削除する。子データは `ON DELETE CASCADE` で連鎖して削除される（13.4）。
+- 削除方法：1時間ごとに実行する定期ジョブが、期限を超えた `videos` 行を削除する。子データは `ON DELETE CASCADE` で連鎖して削除される（13.4）。
+- スケジュール方式【確定】：Supabase の `pg_cron` と `pg_net` で、1時間ごとに API Route（`/api/cron/purge-expired`、`CRON_SECRET` で保護）を呼び出す。削除の本体は TypeScript（`src/server/purge-expired.ts`）に置く。
+  - 理由：保持期間の定数を TypeScript の1か所で管理でき、テストもしやすいため。Vercel Cron は Hobby プランでは1日1回までのため採用しない。アプリが停止していてジョブが失敗しても、読み取り時の期限判定により期限切れのデータは見えない。
+  - `pg_cron` の登録は、デプロイ先のURLが決まるデプロイのスライスで行う。
 - 削除の遅れへの備え：ジョブの実行前でも期限切れのデータが見えないよう、API Route でのデータ取得時にも、期限内かを判定する。期限を超えていれば「見つからない」として扱う。
 - 対象外：`users` と Supabase Auth のアカウント情報（YouTubeのデータではないため）。
 - 削除後に動画が見つからない場合、エラー表示はせず「①URL入力状態」として扱う。
