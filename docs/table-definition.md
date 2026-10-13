@@ -143,7 +143,7 @@ CHECK (
 
 - 期限切れ削除ジョブ（要件定義書3.3）は、`guest_id IS NOT NULL` の行は `created_at` から24時間、`user_id IS NOT NULL` の行は `created_at` から29日を超えたものを対象にする。
 - `created_at` は、引継ぎ（`UPDATE`）や再分析では更新しない。保持期間は定数 `GUEST_RETENTION_HOURS`（初期値24）と `USER_RETENTION_DAYS`（初期値29）で管理する。
-- ログイン後の引継ぎは `UPDATE videos SET user_id = 新user_id, guest_id = NULL WHERE guest_id = Cookieの値`。
+- ログイン後の引継ぎは `UPDATE videos SET user_id = 新user_id, guest_id = NULL WHERE guest_id = Cookieの値 AND created_at >= 現在時刻 - 24時間`（期限切れのゲスト動画は引継がない。理由は要件定義書3.1）。
 - 同じユーザーが同じ動画を複数回登録してもよい（`user_id` ＋ `source_id` ＋ `video_id` のユニーク制約は設けない）【確定】。
 
 ### 5.2 comments（コメント本体）
