@@ -618,7 +618,9 @@ comment_analysis
 #### users
 
 - `role`：`'user'` / `'admin'` の2値（MVPではこれで十分）。
-- Supabase Auth との同期方式、追加プロフィール項目の要否は【未決定】。
+- Supabase Auth との同期方式は【確定】：DBトリガー方式。`auth.users` に行が追加されたら、`public.users`（`role='user'`）を自動で作成する（`supabase/migrations/20261013000005_sync_auth_users.sql`）。
+  - 理由：サインアップの経路に関わらず必ず作られ、アプリ側で作り忘れることがないため。削除側は `users.id → auth.users.id` の CASCADE で連動する。
+- 追加プロフィール項目の要否は【未決定】。
 
 #### comment_groups
 
@@ -816,7 +818,6 @@ erDiagram
 ### 20.1 未決定（原文で未決定とされているもの）
 
 - 認証方式、プロフィール項目、権限体系の詳細（3.2、13.2）
-- Supabase Auth と `users` の同期方式（13.2）
 - 処理の非同期化方法（特に、7.2の「残りをバックグラウンド取得」の実現方法）（5章、17.1）
 - アドバイスの生成条件（5章）
 - ランキングの計算式、同率順位の扱い（11章）
