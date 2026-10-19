@@ -8,7 +8,7 @@ import { createSessionClient } from "@/server/supabase/server";
 // =============================================================
 // 認証の Server Actions（フォームから直接呼ばれるサーバー側の関数）
 //
-// TODO(未決定): 認証方式（要件定義書3.2）。仮置きとして、メールアドレスとパスワードにしている。
+// 認証方式は、メールアドレスとパスワード（要件定義書3.2で確定。メール確認なし）。
 // =============================================================
 
 export type AuthFormState = { error?: string; message?: string } | undefined;
