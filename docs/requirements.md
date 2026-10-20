@@ -818,6 +818,9 @@ erDiagram
 | コメント取得 | YouTube Data API | YouTubeデータ取得 |
 
 - Embeddingモデル：OpenAI `text-embedding-3-small`【確定】
+- shadcn/ui のスタイル【確定】：`radix-nova`（Nova プリセット、Radix ベース、baseColor は neutral）。コンポーネントは公式 CLI（`npx shadcn@latest add <名前>`）で追加し、手でコピーしない。
+  - 理由：公式の現行の既定スタイルで、CLI の出力をそのまま使えば、アクセシビリティ対応や依存関係が公式と一致するため。手でコピーすると古い版が混ざる（スライス1で発生）。
+  - Radix ベースにしたのは、既存コードが Radix の書き方（`asChild`）を使っているため。
 - コメント分析・アドバイス生成用のLLMプロバイダーとモデルは【未決定】（Vercel AI SDK で抽象化されるため、実装への影響は小さい）。
 
 ---
