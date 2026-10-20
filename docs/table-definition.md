@@ -20,7 +20,7 @@
 
 ---
 
-## 2. テーブル一覧（8テーブル）
+## 2. テーブル一覧（9テーブル）
 
 | テーブル | 役割 |
 | --- | --- |
@@ -32,6 +32,7 @@
 | `advice_logs` | AIが生成したアドバイスの履歴を保存する。モデル情報と生成時刻を記録する。 |
 | `users` | 認証ユーザーのプロフィールと権限情報を保持する。 |
 | `sources` | 媒体情報を管理する。MVPは `youtube` のみ。 |
+| `api_usage_logs` | YouTube・AIのAPI使用量を記録する。利用上限やゲストのIP単位の上限の判定に使う。 |
 
 ---
 
@@ -49,11 +50,13 @@
 | `advice_logs.video_id` | `videos.id` | 必須 | CASCADE |
 | `advice_logs.user_id` | `users.id` | 任意 | CASCADE |
 | `users.id` | `auth.users.id` | 必須 | CASCADE |
+| `api_usage_logs.user_id` | `users.id` | 任意 | SET NULL |
 
 - `videos.guest_id` と `advice_logs.guest_id` は外部キーを持たない。
+- `api_usage_logs.video_id` と `api_usage_logs.guest_id` は外部キーを持たない（動画が削除されても使用量の記録を残すため）。
 - `ON DELETE` は【確定】。動画やユーザーを削除すると、それに属するデータが連鎖して削除される。
   - 期限切れ削除ジョブは、期限切れの `videos` 行を削除すれば、子テーブルも連鎖して削除される。
-  - 例外は2つ。`videos.source_id` は RESTRICT（動画が残っている媒体は削除できない）、`comment_analysis.group_id` は SET NULL（グループが消えても分析結果は残す）。
+  - 例外は3つ。`videos.source_id` は RESTRICT（動画が残っている媒体は削除できない）、`comment_analysis.group_id` は SET NULL（グループが消えても分析結果は残す）、`api_usage_logs.user_id` は SET NULL（アカウントが消えても使用量の記録は残す）。
 
 ### 関係の補足
 
@@ -111,6 +114,14 @@
 | `system` | 自動生成 |
 | `user` | ユーザー操作による生成（MVPでは使わない） |
 
+### 4.5 `fetch_status`（`videos.fetch_status`）【確定】
+
+| 値 | 意味 |
+| --- | --- |
+| `fetching` | 残りのコメントを取得中（要件定義書7.2） |
+| `done` | 取得完了 |
+| `failed` | 途中で失敗（取得済みのコメントは残る） |
+
 ---
 
 ## 5. 各テーブル定義
@@ -129,6 +140,7 @@
 | `title` | text | yes |  | 動画タイトル |
 | `thumbnail_url` | text | no |  | サムネイルURL（URLのみ保存し、画像ファイルは保存しない） |
 | `published_at` | timestamptz | no |  | 公開日時 |
+| `fetch_status` | enum | yes |  | コメント取得の状況（4.5参照）。`DEFAULT 'done'`。登録時にアプリが `fetching` か `done` を入れる【確定】 |
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 
 **制約（確定）**
@@ -277,6 +289,32 @@ CHECK (
 
 - `api_notes` は必須ではないが、実装やデバッグのメモとして使えるため残す。
 
+### 5.9 api_usage_logs（API使用量の記録）【確定】
+
+関連：要件定義書 3.1、13.2、14.2、17.2
+
+| カラム | 型 | 必須 | FK | 説明 |
+| --- | --- | --- | --- | --- |
+| `id` | uuid | yes | PK | 主キー |
+| `service` | text | yes |  | `'youtube'`（AIはスライス3以降で `'openai'` など） |
+| `endpoint` | text | yes |  | 呼んだAPI（例：`'videos.list'`、`'commentThreads.list'`） |
+| `units` | integer | no |  | YouTube APIのクォータ消費量 |
+| `model` | text | no |  | AIのモデル名 |
+| `input_tokens` | integer | no |  | AIの入力トークン数 |
+| `output_tokens` | integer | no |  | AIの出力トークン数 |
+| `estimated_cost_usd` | numeric(12,6) | no |  | AIの推定費用（米ドル） |
+| `succeeded` | boolean | yes |  | 呼び出しが成功したか（失敗もクォータを消費するので記録する） |
+| `duration_ms` | integer | no |  | 処理時間（ミリ秒） |
+| `video_id` | uuid | no | （FKなし） | 対象の動画の内部ID。動画が削除されても残す |
+| `user_id` | uuid | no | → `users.id` | ログインユーザーの操作による呼び出しの場合 |
+| `guest_id` | uuid | no | （FKなし） | ゲストの操作による呼び出しの場合 |
+| `ip_hash` | text | no |  | ゲストのIPアドレスを HMAC-SHA256 で変換した値。IPそのものは保存しない。ゲストのIP単位の上限の判定に使う |
+| `created_at` | timestamptz | yes |  | レコード作成日時（＝呼び出し時刻） |
+
+- 1回のAPI呼び出しにつき1行。
+- 期限切れ削除ジョブの対象外（YouTubeのデータを含まないため）。保持期間は【未決定】。
+- RLSは有効で、ポリシーなし（サーバー専用）。
+
 ---
 
 ## 6. インデックス
@@ -292,6 +330,7 @@ CHECK (
 | `idx_comments_video_external_unique` | `comments` | `video_id`, `external_comment_id` | 複合ユニーク | 同じコメントの重複登録を防ぐ（要件定義書7.4） |
 | `idx_comment_analysis_latest_unique` | `comment_analysis` | `comment_id`（`WHERE is_latest`） | 部分ユニーク | 同じコメントで最新の分析結果を1行に保つ |
 | `idx_videos_created_at` | `videos` | `created_at` | 通常 | 期限切れ削除ジョブの検索を高速化する |
+| `idx_api_usage_logs_ip_hash_created_at` | `api_usage_logs` | `ip_hash`, `created_at`（`WHERE ip_hash IS NOT NULL`） | 部分・複合 | ゲストのIP単位の上限（直近24時間の回数）を数える |
 
 ```sql
 -- ゲストの1動画制限をDBレベルでも保証する
@@ -328,6 +367,7 @@ ON videos(created_at);
 | `comment_analysis` | `group_id`（`comment_id` は6.1の複合インデックスで対応） |
 | `comment_groups` | `video_id` |
 | `advice_logs` | `video_id`, `user_id` |
+| `api_usage_logs` | `user_id` |
 
 ---
 
@@ -337,8 +377,8 @@ ON videos(created_at);
 
 - `ng_words` の有効／無効の管理
 - `users` の追加のプロフィール項目
-- `videos` の追加項目
-- AI利用量、トークン数、推定費用の記録先（専用テーブルか、ログ出力か）
+- `videos` の追加項目（`fetch_status` 以外）
+- `api_usage_logs` の保持期間
 
 ### 7.2 要確認
 
