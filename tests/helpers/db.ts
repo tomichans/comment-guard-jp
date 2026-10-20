@@ -6,7 +6,7 @@ import type { Database } from "@/lib/database.types";
 // テスト用のヘルパー
 //
 // テストはローカルの Supabase（npx supabase start）に対して実行する。
-// YouTube からの取得はまだない（スライス2）ので、テストデータは service role で直接 INSERT する。
+// テストデータは service role で直接 INSERT する。YouTube からの取得は、偽物の YouTubeApi で再現する（tests/helpers/fake-youtube.ts）。
 // 各テストは自分が作ったデータだけを後片付けする。
 // =============================================================
 
@@ -189,6 +189,13 @@ export async function exists(
  * ゲストの動画は videos を消せば子テーブルまで消える。
  */
 export async function cleanup() {
+  // API使用量の記録は、動画やユーザーを消しても残る設計なので、テストで作った分を個別に消す。
+  if (createdUserIds.length > 0) {
+    await admin.from("api_usage_logs").delete().in("user_id", createdUserIds);
+  }
+  if (createdGuestIds.length > 0) {
+    await admin.from("api_usage_logs").delete().in("guest_id", createdGuestIds);
+  }
   for (const id of createdUserIds.splice(0)) {
     await admin.auth.admin.deleteUser(id);
   }
