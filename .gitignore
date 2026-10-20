@@ -1,1 +1,26 @@
-.env
+# dependencies
+/node_modules
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+
+# 環境変数ファイルには秘密情報が入るため、すべて除外する。
+# 雛形の .env.example だけはコミットする。
+.env*
+!.env.example
+
+# vercel
+.vercel
+
