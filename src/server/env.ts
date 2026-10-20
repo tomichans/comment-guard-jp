@@ -31,4 +31,12 @@ export const serverEnv = {
   get cronSecret() {
     return required("CRON_SECRET");
   },
+  // YouTube Data API v3 の APIキー（Google Cloud で発行する）。
+  get youtubeApiKey() {
+    return required("YOUTUBE_API_KEY");
+  },
+  // ゲストのIPアドレスを変換（HMAC）するための秘密の鍵。src/server/ip.ts を参照。
+  get ipHashSecret() {
+    return required("IP_HASH_SECRET");
+  },
 };
