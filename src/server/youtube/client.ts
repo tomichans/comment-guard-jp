@@ -91,19 +91,40 @@ async function callApi<T>(path: string, params: Record<string, string>): Promise
       headers: { "X-Goog-Api-Key": serverEnv.youtubeApiKey },
       cache: "no-store",
     });
-  } catch {
-    // 通信自体の失敗（DNS、タイムアウトなど）
+  } catch (e) {
+    // 通信自体の失敗（DNS、タイムアウト、プロキシなど）
+    console.error("[youtube] 通信に失敗しました", {
+      path,
+      cause: e instanceof Error ? (e.cause ?? e.message) : String(e),
+    });
     throw new VideoError("youtube_error");
   }
 
   if (response.ok) return (await response.json()) as T;
 
   // エラーの理由は error.errors[0].reason に入っている（例：commentsDisabled、quotaExceeded）。
+  // details[].reason には、より具体的な理由（例：API_KEY_INVALID、SERVICE_DISABLED）が入ることがある。
   const body = (await response.json().catch(() => null)) as {
-    error?: { errors?: { reason?: string }[] };
+    error?: {
+      message?: string;
+      errors?: { reason?: string }[];
+      details?: { reason?: string }[];
+    };
   } | null;
   const reason = body?.error?.errors?.[0]?.reason;
-  throw new VideoError(errorCodeFor(response.status, reason));
+  const code = errorCodeFor(response.status, reason);
+  // 画面には大まかなエラーしか出さないので、原因を調べられるよう、YouTube が返した理由をサーバーのログに残す。
+  // YouTube のエラーメッセージに API キーは含まれない（キーはヘッダーで送っているため URL にも出ない）。
+  if (code === "youtube_error" || code === "quota_exceeded") {
+    console.error("[youtube] API がエラーを返しました", {
+      path,
+      status: response.status,
+      reason,
+      detail: body?.error?.details?.find((d) => d.reason)?.reason,
+      message: body?.error?.message,
+    });
+  }
+  throw new VideoError(code);
 }
 
 /** YouTube API の HTTP ステータスと理由を、このアプリのエラーコードに変換する。 */
