@@ -102,3 +102,30 @@ export async function listCommentsOfOwnedVideo(
   if (error) throw error;
   return data;
 }
+
+/**
+ * 自分の動画を削除する（要件定義書18.2）。削除できたら true、他人の動画・期限切れ・存在しない場合は false。
+ *
+ * 削除できるのはログインユーザーだけなので、引数もログインユーザーに限っている（ゲストは API Route で 403 にする）。
+ * 削除はログインユーザーの Supabase クライアントで行うので、RLS の videos_delete_own も効く（二重の防御）。
+ * 消すのは videos の行だけ。コメント、分析結果、グループ、アドバイスは ON DELETE CASCADE で DB が連鎖して削除する（13.4）。
+ */
+export async function deleteOwnedVideo(
+  owner: Extract<Owner, { kind: "user" }>,
+  videoId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  // 期限切れの動画は「存在しない」扱い（3.3）なので、先に findOwnedVideo() で確認する。
+  const video = await findOwnedVideo(owner, videoId, now);
+  if (!video) return false;
+
+  // count: "exact" で、実際に消えた行数を受け取る。
+  // 確認と削除の間に削除ジョブなどで消えていた場合は 0 になり、「存在しない」として扱う。
+  const { count, error } = await owner.client
+    .from("videos")
+    .delete({ count: "exact" })
+    .eq("id", video.id)
+    .eq("user_id", owner.userId);
+  if (error) throw error;
+  return count === 1;
+}

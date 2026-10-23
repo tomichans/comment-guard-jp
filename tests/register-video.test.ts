@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 import { GUEST_DAILY_VIDEO_LIMIT } from "@/lib/config/limits";
 import { VideoError } from "@/server/video-errors";
@@ -216,6 +216,23 @@ describe("ログインユーザーの残りのコメントの取得（要件定�
     expect(await countComments(video.id)).toBe(100);
     const usage = await usageOf(video.id);
     expect(usage.at(-1)).toMatchObject({ endpoint: "commentThreads.list", succeeded: false });
+  });
+
+  it("取得中に動画が削除されたら、エラーのログを出さずに止まる（要件定義書18.2）", async () => {
+    const youtube = fakeYouTube({ pages: [page("d1", 100, "T2"), page("d2", 100, "T3")] });
+    const { video, fetchRemaining } = await registerVideo(await user(), URL, youtube);
+    await admin.from("videos").delete().eq("id", video.id);
+
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await fetchRemaining!();
+      expect(errorLog).not.toHaveBeenCalled();
+    } finally {
+      errorLog.mockRestore();
+    }
+    // 2ページ目を保存しようとした時点で止まり、3ページ目は取得しない。
+    expect(youtube.calls).toHaveLength(2);
+    expect(await countComments(video.id)).toBe(0);
   });
 });
 
