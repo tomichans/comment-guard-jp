@@ -158,6 +158,11 @@ export async function fetchRemainingComments(opts: {
       pageToken = page.nextPageToken;
     }
   } catch (e) {
+    // 23503 = foreign_key_violation。取得中にユーザーが動画を削除すると（要件定義書18.2）、
+    // 次のページのコメントを保存しようとした時点で、親の動画がないためこのエラーになる。
+    // 失敗ではないので、エラーのログを出さずに止める（更新する videos の行もない）。
+    if ((e as { code?: string }).code === "23503") return;
+
     status = "failed";
     // エラーの種類だけを記録する（コメント本文や API キーはログに出さない。要件定義書16章）。
     const reason = e instanceof VideoError ? e.code : e instanceof Error ? e.message : "unknown";
