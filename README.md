@@ -46,6 +46,22 @@ cp .env.example .env.local
 npm run dev   # http://localhost:3000
 ```
 
+## YouTube APIキーの取得
+
+コメントの取得には、YouTube Data API v3 の APIキーが必要（`.env.local` の `YOUTUBE_API_KEY`）。
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作る
+2. 「APIとサービス」→「ライブラリ」で **YouTube Data API v3** を有効にする
+3. 「APIとサービス」→「認証情報」→「認証情報を作成」→「APIキー」でキーを発行する
+4. 発行したキーの「APIの制限」で、YouTube Data API v3 だけに制限しておく（キーが漏れたときの被害を減らすため）
+5. 「アプリケーションの制限」は「なし」にする。「ウェブサイト（HTTPリファラー）」にすると、サーバーからの呼び出しが
+   `API_KEY_HTTP_REFERRER_BLOCKED` で拒否される（リファラーはブラウザが付けるもので、サーバーからの呼び出しには付かないため）
+
+無料のクォータは1日10,000ユニット。動画1本の登録で、ゲストは2ユニット、ログインユーザーは最大11ユニットを使う
+（動画情報1回＋コメント1ページにつき1回）。使用量は `api_usage_logs` テーブルで確認できる。
+
+`IP_HASH_SECRET` には、`openssl rand -hex 32` などで作ったランダムな文字列を入れる。
+
 ## テスト
 
 ローカルの Supabase が起動している状態で実行する（CI は使わない）。
@@ -69,6 +85,9 @@ src/
   lib/                 ブラウザとサーバーの両方で使えるもの（保持期間の定数、DB の型など）
   server/              サーバー専用（先頭で import "server-only"。ブラウザから import するとビルドエラー）
     access.ts          ★ 所有確認と期限判定の共通関数。API Route は必ずここを通す
+    videos/register.ts 動画の登録とコメントの取得（最初の100件＋残り）
+    youtube/client.ts  YouTube Data API の呼び出し
+    usage.ts           API使用量の記録（api_usage_logs）
   proxy.ts             Next.js 16 の proxy（旧 middleware）。Supabase のトークン更新のみ
 supabase/
   migrations/          DB のマイグレーション

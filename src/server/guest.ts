@@ -20,7 +20,7 @@ import { isUuid } from "@/lib/uuid";
 //
 // 有効期限の起点（ユーザーと決定）：ゲストが動画を作成した時点で Cookie を（再）発行する。
 // 初回訪問時に発行すると、訪問の20時間後に動画を作った場合に、データより先に Cookie が4時間で切れてしまうため。
-// 動画の作成はスライス2で実装するので、ここでは発行用の関数を用意するだけにしている。
+// 発行するのは、動画の登録が成功したとき（POST /api/videos）。失敗したときは発行しない。
 // =============================================================
 
 export const GUEST_COOKIE_NAME = "guest_id";
@@ -36,12 +36,11 @@ export async function readGuestId(): Promise<string | null> {
 }
 
 /**
- * ゲストが動画を作成するときに呼ぶ（スライス2で使う）。
- * 既存の guest_id があればそれを使い、なければ新しく発行する。
+ * ゲストが動画を作成したときに呼ぶ。
+ * guestId は、既存の Cookie の値か、登録の前に新しく作った UUID（src/app/api/videos/route.ts）。
  * どちらの場合も Cookie を書き直して、有効期限を「今から24時間」にそろえる。
  */
-export async function getOrIssueGuestId(): Promise<string> {
-  const guestId = (await readGuestId()) ?? crypto.randomUUID();
+export async function issueGuestCookie(guestId: string): Promise<void> {
   (await cookies()).set(GUEST_COOKIE_NAME, guestId, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -49,7 +48,6 @@ export async function getOrIssueGuestId(): Promise<string> {
     path: "/",
     maxAge: GUEST_RETENTION_HOURS * 60 * 60,
   });
-  return guestId;
 }
 
 /** ログインへの引継ぎ後に呼ぶ。以後このブラウザはゲストとして扱わない。 */

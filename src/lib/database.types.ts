@@ -49,6 +49,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"api_usage_logs": {
+                  Row: {
+                    "created_at": string,"duration_ms": number | null,"endpoint": string,"estimated_cost_usd": number | null,"guest_id": string | null,"id": string,"input_tokens": number | null,"ip_hash": string | null,"model": string | null,"output_tokens": number | null,"service": string,"succeeded": boolean,"units": number | null,"user_id": string | null,"video_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"duration_ms"?: number | null,"endpoint": string,"estimated_cost_usd"?: number | null,"guest_id"?: string | null,"id"?: string,"input_tokens"?: number | null,"ip_hash"?: string | null,"model"?: string | null,"output_tokens"?: number | null,"service": string,"succeeded": boolean,"units"?: number | null,"user_id"?: string | null,"video_id"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"duration_ms"?: number | null,"endpoint"?: string,"estimated_cost_usd"?: number | null,"guest_id"?: string | null,"id"?: string,"input_tokens"?: number | null,"ip_hash"?: string | null,"model"?: string | null,"output_tokens"?: number | null,"service"?: string,"succeeded"?: boolean,"units"?: number | null,"user_id"?: string | null,"video_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "api_usage_logs_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "users"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"comment_analysis": {
                   Row: {
                     "analyzed_at": string,"comment_id": string,"created_at": string,"embedding": string | null,"group_id": string | null,"id": string,"is_latest": boolean,"labels": (string)[],"ng_words": (string)[] | null,"primary_category": Database["public"]['Enums']["primary_category"],"review_required": boolean | null,"score": number | null
@@ -165,14 +185,14 @@ isOneToOne: false
                   ]
                 },"videos": {
                   Row: {
-                    "created_at": string,"guest_id": string | null,"id": string,"published_at": string | null,"source_id": string,"thumbnail_url": string | null,"title": string,"user_id": string | null,"video_id": string
+                    "created_at": string,"fetch_status": Database["public"]['Enums']["fetch_status"],"guest_id": string | null,"id": string,"published_at": string | null,"source_id": string,"thumbnail_url": string | null,"title": string,"user_id": string | null,"video_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"guest_id"?: string | null,"id"?: string,"published_at"?: string | null,"source_id": string,"thumbnail_url"?: string | null,"title": string,"user_id"?: string | null,"video_id": string
+                    "created_at"?: string,"fetch_status"?: Database["public"]['Enums']["fetch_status"],"guest_id"?: string | null,"id"?: string,"published_at"?: string | null,"source_id": string,"thumbnail_url"?: string | null,"title": string,"user_id"?: string | null,"video_id": string
                   }
                   Update: {
-                    "created_at"?: string,"guest_id"?: string | null,"id"?: string,"published_at"?: string | null,"source_id"?: string,"thumbnail_url"?: string | null,"title"?: string,"user_id"?: string | null,"video_id"?: string
+                    "created_at"?: string,"fetch_status"?: Database["public"]['Enums']["fetch_status"],"guest_id"?: string | null,"id"?: string,"published_at"?: string | null,"source_id"?: string,"thumbnail_url"?: string | null,"title"?: string,"user_id"?: string | null,"video_id"?: string
                   }
                   Relationships: [
                     {
@@ -198,7 +218,7 @@ isOneToOne: false
             [_ in never]: never
           }
           Enums: {
-            "group_type": "feedback_request"|"question","primary_category": "question"|"feedback"|"praise"|"negative_opinion"|"harmful"|"spam"|"other","triggered_by": "system"|"user"
+            "fetch_status": "fetching"|"done"|"failed","group_type": "feedback_request"|"question","primary_category": "question"|"feedback"|"praise"|"negative_opinion"|"harmful"|"spam"|"other","triggered_by": "system"|"user"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -318,7 +338,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "group_type": ["feedback_request", "question"],"primary_category": ["question", "feedback", "praise", "negative_opinion", "harmful", "spam", "other"],"triggered_by": ["system", "user"]
+            "fetch_status": ["fetching", "done", "failed"],"group_type": ["feedback_request", "question"],"primary_category": ["question", "feedback", "praise", "negative_opinion", "harmful", "spam", "other"],"triggered_by": ["system", "user"]
           }
         }
 } as const
