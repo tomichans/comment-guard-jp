@@ -139,7 +139,7 @@ export async function listCommentThreadsOfOwnedVideo(
     .select("*", { count: "exact" })
     .eq("video_id", video.id)
     .is("parent_comment_id", null);
-  // TODO(未決定)：返信も検索の対象に含めるか（要件定義書4.3）。今は親コメントの本文だけを検索する。
+  // 検索するのは親コメントの本文だけ（返信は含めない。要件定義書4.3）。
   if (q) query = query.ilike("comment_text", `%${escapeLike(q)}%`);
   for (const column of SORT_COLUMNS[sort]) {
     query = query.order(column, { ascending: false, nullsFirst: false });
