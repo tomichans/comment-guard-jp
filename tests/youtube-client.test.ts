@@ -14,6 +14,7 @@ describe("YouTube API の応答の変換", () => {
               id: "p1",
               snippet: { textDisplay: "親", authorDisplayName: "A", likeCount: 3, publishedAt: "2026-10-01T00:00:00Z" },
             },
+            totalReplyCount: 12,
           },
           replies: { comments: [{ id: "p1.r1", snippet: { textDisplay: "返信", parentId: "p1" } }] },
         },
@@ -29,6 +30,23 @@ describe("YouTube API の応答の変換", () => {
       ["p2", null],
     ]);
     expect(result.comments[0]).toMatchObject({ text: "親", author: "A", likeCount: 3 });
+  });
+
+  it("返信の総数は親コメントにだけ入る（同梱された返信の数ではなく、YouTube の totalReplyCount）", () => {
+    const result = toCommentThreadPage({
+      items: [
+        {
+          snippet: { topLevelComment: { id: "p1", snippet: { textDisplay: "親" } }, totalReplyCount: 12 },
+          replies: { comments: [{ id: "p1.r1", snippet: { textDisplay: "返信", parentId: "p1" } }] },
+        },
+        { snippet: { topLevelComment: { id: "p2", snippet: { textDisplay: "親2" } } } },
+      ],
+    });
+    expect(result.comments.map((c) => [c.externalId, c.replyCount])).toEqual([
+      ["p1", 12],
+      ["p1.r1", null],
+      ["p2", 0],
+    ]);
   });
 
   it("最後のページは nextPageToken が null", () => {

@@ -28,6 +28,8 @@ export type YouTubeComment = {
   author: string | null;
   likeCount: number | null;
   postedAt: string | null;
+  /** 返信の総数（YouTube の totalReplyCount）。親コメントだけに入り、返信は null。 */
+  replyCount: number | null;
 };
 
 export type CommentThreadPage = {
@@ -64,7 +66,11 @@ type CommentSnippet = {
 type CommentThreadsResponse = {
   nextPageToken?: string;
   items?: {
-    snippet: { topLevelComment: { id: string; snippet: CommentSnippet } };
+    snippet: {
+      topLevelComment: { id: string; snippet: CommentSnippet };
+      // 返信の総数。同梱される返信は一部だけなので、件数はこちらを使う。
+      totalReplyCount?: number;
+    };
     // commentThreads.list に同梱される返信は一部だけ（要件定義書7.3）。全件取得は将来機能。
     replies?: { comments?: { id: string; snippet: CommentSnippet }[] };
   }[];
@@ -141,6 +147,7 @@ function toComment(
   id: string,
   snippet: CommentSnippet,
   parentExternalId: string | null,
+  replyCount: number | null = null,
 ): YouTubeComment {
   return {
     externalId: id,
@@ -149,6 +156,7 @@ function toComment(
     author: snippet.authorDisplayName ?? null,
     likeCount: snippet.likeCount ?? null,
     postedAt: snippet.publishedAt ?? null,
+    replyCount,
   };
 }
 
@@ -158,7 +166,7 @@ export function toCommentThreadPage(data: CommentThreadsResponse): CommentThread
   const comments: YouTubeComment[] = [];
   for (const item of items) {
     const top = item.snippet.topLevelComment;
-    comments.push(toComment(top.id, top.snippet, null));
+    comments.push(toComment(top.id, top.snippet, null, item.snippet.totalReplyCount ?? 0));
     for (const reply of item.replies?.comments ?? []) {
       comments.push(toComment(reply.id, reply.snippet, reply.snippet.parentId ?? top.id));
     }

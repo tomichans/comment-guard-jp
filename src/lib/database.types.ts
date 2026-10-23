@@ -117,14 +117,14 @@ isOneToOne: false
                   ]
                 },"comments": {
                   Row: {
-                    "author": string | null,"body_hash": string | null,"comment_text": string,"created_at": string,"external_comment_id": string | null,"id": string,"like_count": number | null,"parent_comment_id": string | null,"posted_at": string | null,"updated_at": string,"video_id": string
+                    "author": string | null,"body_hash": string | null,"comment_text": string,"created_at": string,"external_comment_id": string | null,"id": string,"like_count": number | null,"parent_comment_id": string | null,"posted_at": string | null,"reply_count": number | null,"updated_at": string,"video_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "author"?: string | null,"body_hash"?: string | null,"comment_text": string,"created_at"?: string,"external_comment_id"?: string | null,"id"?: string,"like_count"?: number | null,"parent_comment_id"?: string | null,"posted_at"?: string | null,"updated_at"?: string,"video_id": string
+                    "author"?: string | null,"body_hash"?: string | null,"comment_text": string,"created_at"?: string,"external_comment_id"?: string | null,"id"?: string,"like_count"?: number | null,"parent_comment_id"?: string | null,"posted_at"?: string | null,"reply_count"?: number | null,"updated_at"?: string,"video_id": string
                   }
                   Update: {
-                    "author"?: string | null,"body_hash"?: string | null,"comment_text"?: string,"created_at"?: string,"external_comment_id"?: string | null,"id"?: string,"like_count"?: number | null,"parent_comment_id"?: string | null,"posted_at"?: string | null,"updated_at"?: string,"video_id"?: string
+                    "author"?: string | null,"body_hash"?: string | null,"comment_text"?: string,"created_at"?: string,"external_comment_id"?: string | null,"id"?: string,"like_count"?: number | null,"parent_comment_id"?: string | null,"posted_at"?: string | null,"reply_count"?: number | null,"updated_at"?: string,"video_id"?: string
                   }
                   Relationships: [
                     {

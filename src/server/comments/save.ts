@@ -93,6 +93,7 @@ async function saveBatch(
         body_hash: hash,
         parent_comment_id: parentId,
         posted_at: c.postedAt,
+        reply_count: c.replyCount,
       });
       continue;
     }
@@ -104,7 +105,12 @@ async function saveBatch(
     }
     const { error: updateError } = await admin
       .from("comments")
-      .update({ comment_text: c.text, body_hash: hash, like_count: c.likeCount })
+      .update({
+        comment_text: c.text,
+        body_hash: hash,
+        like_count: c.likeCount,
+        reply_count: c.replyCount,
+      })
       .eq("id", row.id);
     if (updateError) throw updateError;
     total.updated += 1;

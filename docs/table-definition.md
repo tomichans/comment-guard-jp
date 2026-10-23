@@ -172,11 +172,13 @@ CHECK (
 | `like_count` | int | no |  | いいね等の数 |
 | `body_hash` | text | no |  | `SHA-256(comment_text)`。再分析要否の判定に使う |
 | `parent_comment_id` | uuid | no | → `comments.id`（自己参照） | `NULL`：親コメント。値あり：返信（親コメントの `id`） |
+| `reply_count` | integer | no |  | 返信の総数（YouTube の `totalReplyCount`）。親コメントだけに入り、返信は `NULL`。「返信が多い順」の並べ替えに使う【確定】 |
 | `posted_at` | timestamptz | no |  | 投稿日時（媒体側の値） |
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 | `updated_at` | timestamptz | yes |  | `DEFAULT now()`。UPDATE時にトリガーで自動更新する（本文変更検知のUPDATEを含む） |
 
 - `raw_payload`（YouTube APIの生データ）は持たない。
+- `reply_count` を保存する理由【確定】：アプリに保存される返信は、1スレッドにつき YouTube が同梱する数件だけ（要件定義書7.3）なので、保存してある返信を数えても正しい件数にならないため。値は、コメント取得の応答にもともと入っているので、YouTube への問い合わせは増えない。
 - YouTube APIが返す親コメントの `external_comment_id` は、内部の `parent_comment_id`（uuid）とは別物。保存時に `external_comment_id` から内部の `id` への変換が必要。
 
 ### 5.3 comment_analysis（AI分析結果）
