@@ -2,6 +2,11 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  COMMENT_PAGE_SIZE,
+  DEFAULT_COMMENT_SORT,
+  type CommentSort,
+} from "@/lib/comment-list";
 import { expiryCutoff, isExpired } from "@/lib/config/retention";
 import type { Database, Tables } from "@/lib/database.types";
 import { isUuid } from "@/lib/uuid";
@@ -79,28 +84,107 @@ export async function listOwnedVideos(
   return data;
 }
 
+export type CommentThread = Comment & {
+  /** 保存されている返信（古い順）。YouTube が同梱した数件だけ（要件定義書7.3）。 */
+  replies: Comment[];
+};
+
+export type CommentThreadPage = {
+  threads: CommentThread[];
+  /** 条件（検索語）に合うスレッドの総数 */
+  total: number;
+  /** 続きを読み込むときの offset。最後まで読み込んだら null。 */
+  nextOffset: number | null;
+};
+
+export type CommentListOptions = {
+  sort?: CommentSort;
+  /** 親コメントの本文に含まれる語（部分一致）。空なら絞り込まない。 */
+  q?: string;
+  offset?: number;
+};
+
+// 並び順ごとの、DB の並べ替えの列（上から順に比べる）。
+// 値のない行（NULL）は最後に回す。最後に id で並べるのは、同じ値の行の順番を毎回同じにして、
+// 続きを読み込んだときに、同じコメントが2回出たり抜けたりしないようにするため。
+const SORT_COLUMNS = {
+  newest: ["posted_at"],
+  likes: ["like_count", "posted_at"],
+  replies: ["reply_count", "posted_at"],
+} as const satisfies Record<CommentSort, readonly (keyof Comment)[]>;
+
 /**
- * 自分の動画のコメント一覧。動画が自分のものでなければ null。
+ * 自分の動画のコメント一覧を、スレッド（親コメント＋返信）の形で、COMMENT_PAGE_SIZE 件ずつ返す。
+ * 動画が自分のものでなければ null。
  *
  * comments は所有者の列を持たない（所有者は videos だけが持つ。要件定義書13.2）。
  * そのため、必ず先に findOwnedVideo() で動画の所有を確認してから、その動画の id でコメントを読む。
  * 子テーブル（comment_analysis、comment_groups、advice_logs）を読む関数も、後のスライスで同じ形で追加する。
+ *
+ * 並べ替え・検索・件数の区切りは、親コメントに対して行う。返信は、そのページの親コメントの分だけ読む。
  */
-export async function listCommentsOfOwnedVideo(
+export async function listCommentThreadsOfOwnedVideo(
   owner: Owner,
   videoId: string,
+  { sort = DEFAULT_COMMENT_SORT, q = "", offset = 0 }: CommentListOptions = {},
   now: Date = new Date(),
-): Promise<Comment[] | null> {
+): Promise<CommentThreadPage | null> {
   const video = await findOwnedVideo(owner, videoId, now);
   if (!video) return null;
+  const client = clientFor(owner);
 
-  const { data, error } = await clientFor(owner)
+  // [Supabase固有] count: "exact" で、条件に合う行の総数も一緒に受け取る（「全123件」の表示用）。
+  let query = client
     .from("comments")
-    .select("*")
+    .select("*", { count: "exact" })
     .eq("video_id", video.id)
-    .order("posted_at", { ascending: false });
+    .is("parent_comment_id", null);
+  // TODO(未決定)：返信も検索の対象に含めるか（要件定義書4.3）。今は親コメントの本文だけを検索する。
+  if (q) query = query.ilike("comment_text", `%${escapeLike(q)}%`);
+  for (const column of SORT_COLUMNS[sort]) {
+    query = query.order(column, { ascending: false, nullsFirst: false });
+  }
+  const { data: parents, error, count } = await query
+    .order("id")
+    .range(offset, offset + COMMENT_PAGE_SIZE - 1);
   if (error) throw error;
-  return data;
+
+  const repliesByParent = new Map<string, Comment[]>();
+  if (parents.length > 0) {
+    const { data: replies, error: repliesError } = await client
+      .from("comments")
+      .select("*")
+      .eq("video_id", video.id)
+      .in(
+        "parent_comment_id",
+        parents.map((p) => p.id),
+      )
+      .order("posted_at", { ascending: true, nullsFirst: false })
+      .order("id");
+    if (repliesError) throw repliesError;
+    for (const reply of replies) {
+      const list = repliesByParent.get(reply.parent_comment_id!) ?? [];
+      list.push(reply);
+      repliesByParent.set(reply.parent_comment_id!, list);
+    }
+  }
+
+  const total = count ?? 0;
+  const next = offset + parents.length;
+  return {
+    threads: parents.map((p) => ({ ...p, replies: repliesByParent.get(p.id) ?? [] })),
+    total,
+    nextOffset: parents.length > 0 && next < total ? next : null,
+  };
+}
+
+/**
+ * LIKE の検索語に含まれる記号（%、_、\）を、ただの文字として扱うようにする。
+ * [Supabase固有] PostgREST は * も「何にでも一致」として扱い、これは打ち消せない。
+ * 「*」で検索すると全件が出るだけで害はないため、そのままにしている。
+ */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 /**

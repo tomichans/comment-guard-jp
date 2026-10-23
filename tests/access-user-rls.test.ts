@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { findOwnedVideo, listCommentsOfOwnedVideo, type Owner } from "@/server/access";
+import { findOwnedVideo, listCommentThreadsOfOwnedVideo, type Owner } from "@/server/access";
 
 import {
   admin,
@@ -93,6 +93,6 @@ describe("ログインユーザーのアクセス制御（RLS）", () => {
     const owner: Owner = { kind: "user", userId: userA.userId, client: userA.client };
     expect((await findOwnedVideo(owner, videoA))?.id).toBe(videoA);
     expect(await findOwnedVideo(owner, videoB)).toBeNull();
-    expect(await listCommentsOfOwnedVideo(owner, videoB)).toBeNull();
+    expect(await listCommentThreadsOfOwnedVideo(owner, videoB)).toBeNull();
   });
 });

@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import {
   findOwnedVideo,
-  listCommentsOfOwnedVideo,
+  listCommentThreadsOfOwnedVideo,
   listOwnedVideos,
   type Owner,
 } from "@/server/access";
@@ -36,7 +36,7 @@ describe("読み取り時の期限判定", () => {
     expect(await exists("videos", video.id)).toBe(true);
     // アプリからは見えない
     expect(await findOwnedVideo(owner, video.id)).toBeNull();
-    expect(await listCommentsOfOwnedVideo(owner, video.id)).toBeNull();
+    expect(await listCommentThreadsOfOwnedVideo(owner, video.id)).toBeNull();
     expect(await listOwnedVideos(owner)).toEqual([]);
   });
 
