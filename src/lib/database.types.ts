@@ -185,14 +185,14 @@ isOneToOne: false
                   ]
                 },"videos": {
                   Row: {
-                    "created_at": string,"fetch_status": Database["public"]['Enums']["fetch_status"],"guest_id": string | null,"id": string,"published_at": string | null,"source_id": string,"thumbnail_url": string | null,"title": string,"user_id": string | null,"video_id": string
+                    "analysis_started_at": string,"analysis_status": Database["public"]['Enums']["analysis_status"],"created_at": string,"fetch_status": Database["public"]['Enums']["fetch_status"],"guest_id": string | null,"id": string,"published_at": string | null,"source_id": string,"thumbnail_url": string | null,"title": string,"user_id": string | null,"video_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"fetch_status"?: Database["public"]['Enums']["fetch_status"],"guest_id"?: string | null,"id"?: string,"published_at"?: string | null,"source_id": string,"thumbnail_url"?: string | null,"title": string,"user_id"?: string | null,"video_id": string
+                    "analysis_started_at"?: string,"analysis_status"?: Database["public"]['Enums']["analysis_status"],"created_at"?: string,"fetch_status"?: Database["public"]['Enums']["fetch_status"],"guest_id"?: string | null,"id"?: string,"published_at"?: string | null,"source_id": string,"thumbnail_url"?: string | null,"title": string,"user_id"?: string | null,"video_id": string
                   }
                   Update: {
-                    "created_at"?: string,"fetch_status"?: Database["public"]['Enums']["fetch_status"],"guest_id"?: string | null,"id"?: string,"published_at"?: string | null,"source_id"?: string,"thumbnail_url"?: string | null,"title"?: string,"user_id"?: string | null,"video_id"?: string
+                    "analysis_started_at"?: string,"analysis_status"?: Database["public"]['Enums']["analysis_status"],"created_at"?: string,"fetch_status"?: Database["public"]['Enums']["fetch_status"],"guest_id"?: string | null,"id"?: string,"published_at"?: string | null,"source_id"?: string,"thumbnail_url"?: string | null,"title"?: string,"user_id"?: string | null,"video_id"?: string
                   }
                   Relationships: [
                     {
@@ -215,10 +215,20 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            [_ in never]: never
+            "comments_to_analyze":
+{ Args: { "p_limit": number,"p_video_id": string }; Returns: Database["public"]["Tables"]["comments"]["Row"][]
+  SetofOptions: {
+    from: "*"
+    to: "comments"
+    isOneToOne: false
+    isSetofReturn: true
+  }
+                           },"video_analysis_summary":
+{ Args: { "p_video_id": string }; Returns: Json
+                           }
           }
           Enums: {
-            "fetch_status": "fetching"|"done"|"failed","group_type": "feedback_request"|"question","primary_category": "question"|"feedback"|"praise"|"negative_opinion"|"harmful"|"spam"|"other","triggered_by": "system"|"user"
+            "analysis_status": "analyzing"|"done"|"failed","fetch_status": "fetching"|"done"|"failed","group_type": "feedback_request"|"question","primary_category": "question"|"feedback"|"praise"|"negative_opinion"|"harmful"|"spam"|"other","triggered_by": "system"|"user"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -338,7 +348,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "fetch_status": ["fetching", "done", "failed"],"group_type": ["feedback_request", "question"],"primary_category": ["question", "feedback", "praise", "negative_opinion", "harmful", "spam", "other"],"triggered_by": ["system", "user"]
+            "analysis_status": ["analyzing", "done", "failed"],"fetch_status": ["fetching", "done", "failed"],"group_type": ["feedback_request", "question"],"primary_category": ["question", "feedback", "praise", "negative_opinion", "harmful", "spam", "other"],"triggered_by": ["system", "user"]
           }
         }
 } as const
