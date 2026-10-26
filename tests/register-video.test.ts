@@ -62,13 +62,13 @@ describe("動画の登録", () => {
     expect(await countComments(video.id)).toBe(100);
   });
 
-  it("返信は、親コメントの内部 id に紐づけて保存する", async () => {
+  it("返信は、親コメントの内部 id に紐づけて保存する。返信の総数は親コメントにだけ入る", async () => {
     const youtube = fakeYouTube({
       pages: [
         {
           comments: [
-            { externalId: "p", parentExternalId: null, text: "親", author: null, likeCount: 1, postedAt: null },
-            { externalId: "p.r", parentExternalId: "p", text: "返信", author: null, likeCount: 0, postedAt: null },
+            { externalId: "p", parentExternalId: null, text: "親", author: null, likeCount: 1, postedAt: null, replyCount: 7 },
+            { externalId: "p.r", parentExternalId: "p", text: "返信", author: null, likeCount: 0, postedAt: null, replyCount: null },
           ],
           threadCount: 1,
           nextPageToken: null,
@@ -83,6 +83,8 @@ describe("動画の登録", () => {
     expect(parent.parent_comment_id).toBeNull();
     expect(reply.parent_comment_id).toBe(parent.id);
     expect(parent.body_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(parent.reply_count).toBe(7);
+    expect(reply.reply_count).toBeNull();
   });
 
   it("YouTube の使用量を、呼び出しごとに記録する（ゲストは ip_hash 付き）", async () => {

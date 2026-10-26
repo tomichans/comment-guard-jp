@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   findOwnedVideo,
-  listCommentsOfOwnedVideo,
+  listCommentThreadsOfOwnedVideo,
   listOwnedVideos,
   type Owner,
 } from "@/server/access";
@@ -39,7 +39,7 @@ describe("ゲストのアクセス制御", () => {
 
   it("ゲストAは自分の動画とコメントを読める", async () => {
     expect((await findOwnedVideo(guestA, videoA))?.id).toBe(videoA);
-    expect(await listCommentsOfOwnedVideo(guestA, videoA)).toHaveLength(1);
+    expect((await listCommentThreadsOfOwnedVideo(guestA, videoA))?.threads).toHaveLength(1);
   });
 
   it("ゲストAはゲストBの動画を読めない", async () => {
@@ -47,7 +47,7 @@ describe("ゲストのアクセス制御", () => {
   });
 
   it("ゲストAはゲストBのコメントを読めない", async () => {
-    expect(await listCommentsOfOwnedVideo(guestA, videoB)).toBeNull();
+    expect(await listCommentThreadsOfOwnedVideo(guestA, videoB)).toBeNull();
   });
 
   it("動画一覧には自分の動画だけが出る", async () => {
@@ -60,7 +60,7 @@ describe("ゲストのアクセス制御", () => {
     const user = await createTestUser();
     const owner: Owner = { kind: "user", userId: user.userId, client: user.client };
     expect(await findOwnedVideo(owner, videoA)).toBeNull();
-    expect(await listCommentsOfOwnedVideo(owner, videoA)).toBeNull();
+    expect(await listCommentThreadsOfOwnedVideo(owner, videoA)).toBeNull();
   });
 
   it("UUID でない ID はエラーではなく「見つからない」になる", async () => {

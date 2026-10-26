@@ -21,9 +21,11 @@ export function thread(id: string, text = `コメント ${id}`, replies = 0): Yo
     author: "投稿者",
     likeCount: 0,
     postedAt: "2026-10-01T00:00:00Z",
+    replyCount: replies,
   };
   const children = Array.from({ length: replies }, (_, i) => ({
     ...parent,
+    replyCount: null,
     externalId: `${id}.r${i}`,
     parentExternalId: id,
     text: `返信 ${i}`,

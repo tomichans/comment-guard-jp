@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 
-import { findOwnedVideo, listCommentsOfOwnedVideo, type Owner } from "@/server/access";
+import { findOwnedVideo, listCommentThreadsOfOwnedVideo, type Owner } from "@/server/access";
 import { migrateGuestVideosToUser } from "@/server/migrate-guest";
 
 import {
@@ -35,8 +35,8 @@ describe("ゲストからログインユーザーへの引継ぎ", () => {
     // ユーザーとして読める（RLS を通る）。子テーブルも、videos の所有者が変わっただけで付いてくる。
     const userOwner: Owner = { kind: "user", userId: user.userId, client: user.client };
     expect((await findOwnedVideo(userOwner, video.id))?.id).toBe(video.id);
-    const comments = await listCommentsOfOwnedVideo(userOwner, video.id);
-    expect(comments?.map((c) => c.id)).toEqual([children.commentId]);
+    const comments = await listCommentThreadsOfOwnedVideo(userOwner, video.id);
+    expect(comments?.threads.map((c) => c.id)).toEqual([children.commentId]);
     const analysis = await user.client.from("comment_analysis").select("id");
     expect(analysis.data?.map((a) => a.id)).toEqual([children.analysisId]);
 
