@@ -770,6 +770,17 @@ erDiagram
 
 ### 14.1 AI利用方針
 
+用途別のモデル一覧（プロバイダーはすべて OpenAI。APIキーは `OPENAI_API_KEY` の1つ）：
+
+| 用途 | モデル | 状態 |
+| --- | --- | --- |
+| コメントの分類 | `gpt-6-luna` | 【確定】 |
+| NG判定（一次） | NGワード辞書（AIは使わない） | 【確定】 |
+| NG判定（Moderation） | `omni-moderation-latest`（無料） | 【確定】 |
+| グルーピングの Embedding（スライス4） | `text-embedding-3-small` | 【確定】 |
+| グループの代表論点の文章づくり（スライス4） | 軽量なモデル。候補は `gpt-6-luna` | 【未決定】スライス4で決める |
+| AIアドバイス（スライス5） | 高性能なモデル。候補は `gpt-6.1-sol`（物足りなければ `gpt-6-astra`） | 【未決定】スライス5で決める |
+
 - **コメント分類**：複数コメントをまとめて安価なモデルへ送信する。1バッチ50コメント（8.7）。
   - モデルは【確定】：OpenAI の小型モデル（初期値 `gpt-6-luna`。`src/lib/config/analysis.ts` の `DEFAULT_CLASSIFY_MODEL`、環境変数 `OPENAI_CLASSIFY_MODEL` で上書きできる）。
     - 理由：グルーピングの Embedding（10.2）と NG判定（下記）も OpenAI なので、APIキーが1つで済むため。2026年10月時点で、OpenAI で最も安い小型モデル。
