@@ -85,11 +85,15 @@ async function getYoutubeSourceId(): Promise<string> {
   return data.id;
 }
 
-/** 動画を1本作る。所有者は userId か guestId のどちらか一方。 */
+/**
+ * 動画を1本作る。所有者は userId か guestId のどちらか一方。
+ * analysisStatus を省くと、DB の既定値（analyzing）になる。
+ */
 export async function insertVideo(opts: {
   userId?: string;
   guestId?: string;
   createdAt?: string;
+  analysisStatus?: "analyzing" | "done" | "failed";
 }) {
   const { data, error } = await admin
     .from("videos")
@@ -100,6 +104,7 @@ export async function insertVideo(opts: {
       video_id: `yt-${crypto.randomUUID().slice(0, 8)}`,
       title: "テスト動画",
       ...(opts.createdAt ? { created_at: opts.createdAt } : {}),
+      ...(opts.analysisStatus ? { analysis_status: opts.analysisStatus } : {}),
     })
     .select()
     .single();

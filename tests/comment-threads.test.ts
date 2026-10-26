@@ -36,7 +36,9 @@ describe("コメント一覧（スレッドの形）", () => {
   beforeAll(async () => {
     const guestId = newGuestId();
     owner = { kind: "guest", guestId };
-    videoId = (await insertVideo({ guestId })).id;
+    // このテストのコメントには分析結果がない。分析に失敗した動画（failed）にして、
+    // 「すべて」タブ（既定）に、分析されていないコメントも出るようにする。
+    videoId = (await insertVideo({ guestId, analysisStatus: "failed" })).id;
 
     const a = await insertParent({ text: "BGMが大きい", likes: 5, replies: 0, postedAt: "2026-10-03T00:00:00Z" });
     await insertParent({ text: "最高でした", likes: 50, replies: 2, postedAt: "2026-10-01T00:00:00Z" });
