@@ -60,6 +60,20 @@ export const DEFAULT_COMMENT_TAB: CommentTab = "praise";
 /** 「すべて」タブを選んだときの警告（要件定義書4.3） */
 export const ALL_TAB_WARNING = "誹謗中傷・スパムを含むコメントも表示されます。よろしいですか？";
 
+/**
+ * 動画の分析の進み具合（GET /api/videos/:id の analysis）。
+ * status は、止まったまま進まない「分析中」を failed として返す（src/server/analysis/status.ts）。
+ */
+export type AnalysisSummary = {
+  status: Enums<"analysis_status">;
+  /** コメント数（親と返信） */
+  total: number;
+  /** そのうち分析が済んだ数 */
+  analyzed: number;
+  /** タブごとの件数（親コメントの数）。"all" は全タブの合計（other を含む）。 */
+  counts: Record<CommentTab, number>;
+};
+
 export function isCommentTab(value: unknown): value is CommentTab {
   return typeof value === "string" && COMMENT_TABS.some((tab) => tab.value === value);
 }

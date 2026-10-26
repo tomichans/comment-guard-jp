@@ -9,13 +9,14 @@ import {
 } from "@/lib/comment-list";
 import {
   COMMENT_TABS,
+  type AnalysisSummary,
   type CommentTab,
   type PrimaryCategory,
 } from "@/lib/comment-categories";
 import { expiryCutoff, isExpired } from "@/lib/config/retention";
 import type { Database, Tables } from "@/lib/database.types";
 import { isUuid } from "@/lib/uuid";
-import { effectiveAnalysisStatus, type AnalysisStatus } from "@/server/analysis/status";
+import { effectiveAnalysisStatus } from "@/server/analysis/status";
 import { createAdminClient } from "@/server/supabase/admin";
 
 // =============================================================
@@ -216,17 +217,6 @@ function withAnalysis({
 }: Comment & { comment_analysis: CommentAnalysis[] }): CommentWithAnalysis {
   return { ...comment, analysis: comment_analysis[0] ?? null };
 }
-
-export type AnalysisSummary = {
-  /** 分析の状況。止まったまま進まない「分析中」は failed として返す（src/server/analysis/status.ts）。 */
-  status: AnalysisStatus;
-  /** コメント数（親と返信） */
-  total: number;
-  /** そのうち分析が済んだ数 */
-  analyzed: number;
-  /** タブごとの件数（分析が済んだ親コメントの数）。"all" は全タブの合計。 */
-  counts: Record<CommentTab, number>;
-};
 
 /** 自分の動画の、分析の進み具合とタブごとの件数。動画が自分のものでなければ null。 */
 export async function getAnalysisSummaryOfOwnedVideo(
