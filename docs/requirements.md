@@ -550,7 +550,7 @@ OpenAI Embedding と、コサイン類似度による判定。
 2. 同一 `video_id`・同一 `group_type` の既存グループと、コサイン類似度を比較する。
 3. 類似度が 0.82 以上なら、既存グループに合流する（`comment_count += 1`）。
 4. 類似度が 0.82 未満なら、新規グループを作成する。
-   - 軽量LLMで `representative_text`（代表論点）を生成する。
+   - 軽量LLM（`gpt-6-luna`【確定】。14.1）で `representative_text`（代表論点）を生成する。
    - `representative_embedding` には、そのコメントのembeddingをそのまま格納する。合流時（手順3）には更新しない【確定】。
    - 例：「音が小さい」「声が聞き取りづらい」「BGMに対してナレーションが小さい」 → 「音声・ナレーションが聞き取りづらい」
 5. `comment_analysis.group_id` を確定する。
@@ -778,9 +778,11 @@ erDiagram
 | NG判定（一次） | NGワード辞書（AIは使わない） | 【確定】 |
 | NG判定（Moderation） | `omni-moderation-latest`（無料） | 【確定】 |
 | グルーピングの Embedding（スライス4） | `text-embedding-3-small` | 【確定】 |
-| グループの代表論点の文章づくり（スライス4） | 軽量なモデル。候補は `gpt-6-luna` | 【未決定】スライス4で決める |
+| グループの代表論点の文章づくり（スライス4） | `gpt-6-luna` | 【確定】 |
 | AIアドバイス（スライス5） | 高性能なモデル。候補は `gpt-6.1-sol`（物足りなければ `gpt-6-astra`） | 【未決定】スライス5で決める |
 
+- **グループの代表論点の文章づくり**（10.3）のモデルは【確定】：分類と同じ `gpt-6-luna`。
+  - 理由：短い文を1つ作るだけの軽い作業で、分類と同じモデルなら設定も料金表（`AI_PRICES_PER_MILLION_TOKENS`）も共通で済むため。実装はスライス4で行う。
 - **コメント分類**：複数コメントをまとめて安価なモデルへ送信する。1バッチ50コメント（8.7）。
   - モデルは【確定】：OpenAI の小型モデル（初期値 `gpt-6-luna`。`src/lib/config/analysis.ts` の `DEFAULT_CLASSIFY_MODEL`、環境変数 `OPENAI_CLASSIFY_MODEL` で上書きできる）。
     - 理由：グルーピングの Embedding（10.2）と NG判定（下記）も OpenAI なので、APIキーが1つで済むため。2026年10月時点で、OpenAI で最も安い小型モデル。
