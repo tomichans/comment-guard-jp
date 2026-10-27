@@ -25,6 +25,7 @@ import { youtubeApi, type YouTubeApi } from "@/server/youtube/client";
 //   4. YouTube から最新のコメント（最大100スレッド）を取得する
 //   5. videos とコメントを保存する
 //   6. ログインユーザーで続きがあれば、残り（最大900スレッド）を後から取得する（fetchRemaining）
+//   7. コメントを分析する（スライス3。src/server/analysis/analyze.ts の runAfterRegister）
 //
 // 3と4を videos の保存より先にしているのは、「動画が見つからない」「コメントが無効」などの
 // エラーのときに、中身のない動画が残らないようにするため（ゲストの1本の枠も消費しない）。
@@ -95,6 +96,8 @@ export async function registerVideo(
       thumbnail_url: info.thumbnailUrl,
       published_at: info.publishedAt,
       fetch_status: hasMore ? "fetching" : "done",
+      // コメントの分析は、登録の後に裏で行う（src/server/analysis/analyze.ts）。
+      analysis_status: "analyzing",
     })
     .select()
     .single();

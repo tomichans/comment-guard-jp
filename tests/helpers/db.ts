@@ -24,12 +24,8 @@ export function anonClient(): SupabaseClient<Database> {
   return createClient<Database>(url, anonKey, noSession);
 }
 
-export const HOUR_MS = 60 * 60 * 1000;
-export const DAY_MS = 24 * HOUR_MS;
-
-export function ago(ms: number, now: Date = new Date()): string {
-  return new Date(now.getTime() - ms).toISOString();
-}
+// 時刻のヘルパーは time.ts にある。DB のテストからは、ここからまとめて読み込めるようにしておく。
+export { DAY_MS, HOUR_MS, ago } from "./time";
 
 export type TestUser = {
   userId: string;
@@ -65,6 +61,7 @@ export async function createTestUser(): Promise<TestUser> {
   return { userId: data.user.id, client };
 }
 
+/** 新しいゲストの ID を作る。作った ID は覚えておき、cleanup() でそのゲストの動画を消す。 */
 export function newGuestId(): string {
   const id = crypto.randomUUID();
   createdGuestIds.push(id);
@@ -85,11 +82,15 @@ async function getYoutubeSourceId(): Promise<string> {
   return data.id;
 }
 
-/** 動画を1本作る。所有者は userId か guestId のどちらか一方。 */
+/**
+ * 動画を1本作る。所有者は userId か guestId のどちらか一方。
+ * analysisStatus を省くと、DB の既定値（analyzing）になる。
+ */
 export async function insertVideo(opts: {
   userId?: string;
   guestId?: string;
   createdAt?: string;
+  analysisStatus?: "analyzing" | "done" | "failed";
 }) {
   const { data, error } = await admin
     .from("videos")
@@ -100,6 +101,7 @@ export async function insertVideo(opts: {
       video_id: `yt-${crypto.randomUUID().slice(0, 8)}`,
       title: "テスト動画",
       ...(opts.createdAt ? { created_at: opts.createdAt } : {}),
+      ...(opts.analysisStatus ? { analysis_status: opts.analysisStatus } : {}),
     })
     .select()
     .single();

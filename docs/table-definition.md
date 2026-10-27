@@ -3,7 +3,7 @@
 `docs/requirements.md`（要件定義書）と対になるファイルです。設計の背景・理由は要件定義書の13章を参照してください。
 
 - **【確定】**：決定済み。そのとおりに作成する。
-- **【未決定】**：まだ決まっていない。第7章に一覧がある。
+- **【未決定】**：まだ決まっていない。第8章に一覧がある。
 - **【要確認】**：要件定義書との整合が取れていない。確認が取れるまで実装しない。
 
 ---
@@ -122,6 +122,14 @@
 | `done` | 取得完了 |
 | `failed` | 途中で失敗（取得済みのコメントは残る） |
 
+### 4.6 `analysis_status`（`videos.analysis_status`）【確定】
+
+| 値 | 意味 |
+| --- | --- |
+| `analyzing` | コメントを分析中（要件定義書5章） |
+| `done` | 分析完了 |
+| `failed` | 途中で失敗（分析済みの結果は残る。要件定義書15.2） |
+
 ---
 
 ## 5. 各テーブル定義
@@ -141,6 +149,8 @@
 | `thumbnail_url` | text | no |  | サムネイルURL（URLのみ保存し、画像ファイルは保存しない） |
 | `published_at` | timestamptz | no |  | 公開日時 |
 | `fetch_status` | enum | yes |  | コメント取得の状況（4.5参照）。`DEFAULT 'done'`。登録時にアプリが `fetching` か `done` を入れる【確定】 |
+| `analysis_status` | enum | yes |  | コメント分析の状況（4.6参照）。`DEFAULT 'analyzing'`。止まったまま5分進まない `analyzing` は、アプリが `failed` として扱う【確定】 |
+| `analysis_started_at` | timestamptz | yes |  | 分析を始めた（やり直した）時刻。`DEFAULT now()`。止まった分析の判定に使う【確定】 |
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 
 **制約（確定）**
@@ -298,8 +308,8 @@ CHECK (
 | カラム | 型 | 必須 | FK | 説明 |
 | --- | --- | --- | --- | --- |
 | `id` | uuid | yes | PK | 主キー |
-| `service` | text | yes |  | `'youtube'`（AIはスライス3以降で `'openai'` など） |
-| `endpoint` | text | yes |  | 呼んだAPI（例：`'videos.list'`、`'commentThreads.list'`） |
+| `service` | text | yes |  | `'youtube'` または `'openai'` |
+| `endpoint` | text | yes |  | 呼んだAPI（`'videos.list'`、`'commentThreads.list'`、`'classify'`（分類のAI）、`'moderations'`（Moderation API）） |
 | `units` | integer | no |  | YouTube APIのクォータ消費量 |
 | `model` | text | no |  | AIのモデル名 |
 | `input_tokens` | integer | no |  | AIの入力トークン数 |
@@ -333,6 +343,7 @@ CHECK (
 | `idx_comment_analysis_latest_unique` | `comment_analysis` | `comment_id`（`WHERE is_latest`） | 部分ユニーク | 同じコメントで最新の分析結果を1行に保つ |
 | `idx_videos_created_at` | `videos` | `created_at` | 通常 | 期限切れ削除ジョブの検索を高速化する |
 | `idx_api_usage_logs_ip_hash_created_at` | `api_usage_logs` | `ip_hash`, `created_at`（`WHERE ip_hash IS NOT NULL`） | 部分・複合 | ゲストのIP単位の上限（直近24時間の回数）を数える |
+| `idx_api_usage_logs_video_id_created_at` | `api_usage_logs` | `video_id`, `created_at` | 複合 | 動画の最後のAPI呼び出しの時刻を探す（止まった分析の判定） |
 
 ```sql
 -- ゲストの1動画制限をDBレベルでも保証する
@@ -373,15 +384,26 @@ ON videos(created_at);
 
 ---
 
-## 7. 未決定・要確認事項
+## 7. 関数（SQL）【確定】
 
-### 7.1 未決定
+PostgREST（supabase-js）のクエリでは書きにくい集計・検索を、SQL の関数にしている（`supabase/migrations/20261026000001_analysis_status.sql`）。
+
+| 関数 | 返す値 | 実行できるロール | 用途 |
+| --- | --- | --- | --- |
+| `comments_to_analyze(p_video_id, p_limit)` | `comments` の行（親コメントを先に） | `service_role` のみ | まだ分析されていない（`is_latest = true` の分析結果がない）コメントを探す |
+| `video_analysis_summary(p_video_id)` | json（`total`、`analyzed`、`counts`） | `authenticated`、`service_role` | 分析の進み具合と、タブごとの件数（親コメントの `primary_category` ごとの数） |
+
+- `video_analysis_summary` は security invoker（既定）なので、ログインユーザーが呼ぶと RLS が効き、自分の動画のコメントしか数えない。
+
+## 8. 未決定・要確認事項
+
+### 8.1 未決定
 
 - `ng_words` の有効／無効の管理
 - `users` の追加のプロフィール項目
 - `videos` の追加項目（`fetch_status` 以外）
 - `api_usage_logs` の保持期間
 
-### 7.2 要確認
+### 8.2 要確認
 
 現在、要確認の事項はない。

@@ -62,9 +62,21 @@ npm run dev   # http://localhost:3000
 
 `IP_HASH_SECRET` には、`openssl rand -hex 32` などで作ったランダムな文字列を入れる。
 
+## OpenAI APIキーの取得
+
+コメントの分類（AI）と NG判定（Moderation API）には、OpenAI の APIキーが必要（`.env.local` の `OPENAI_API_KEY`）。
+
+1. [OpenAI Platform](https://platform.openai.com/) にログインし、「Billing」で支払い方法を登録する（分類のモデルは有料。Moderation API は無料）
+2. 「API keys」→「Create new secret key」でキーを発行する
+3. 「Limits」で、月の利用額の上限を低め（例：5ドル）に設定しておく（キーが漏れたときや、使いすぎたときの被害を減らすため）
+
+分類に使うモデルは `src/lib/config/analysis.ts` の `DEFAULT_CLASSIFY_MODEL`。`.env.local` の `OPENAI_CLASSIFY_MODEL` で上書きできる。
+1回の呼び出しごとのトークン数と推定費用は、`api_usage_logs` テーブル（`service = 'openai'`）で確認できる。
+
 ## テスト
 
 ローカルの Supabase が起動している状態で実行する（CI は使わない）。
+AI と YouTube は偽物（`tests/helpers/fake-ai.ts`、`fake-youtube.ts`）を使うので、テストに APIキーは要らない。
 
 ```bash
 npm test
@@ -87,6 +99,7 @@ src/
     access.ts          ★ 所有確認と期限判定の共通関数。API Route は必ずここを通す
     videos/register.ts 動画の登録とコメントの取得（最初の100件＋残り）
     youtube/client.ts  YouTube Data API の呼び出し
+    analysis/          コメントの分析（NGワード・Moderation API・AI による分類。analyze.ts が流れの本体）
     usage.ts           API使用量の記録（api_usage_logs）
   proxy.ts             Next.js 16 の proxy（旧 middleware）。Supabase のトークン更新のみ
 supabase/

@@ -11,7 +11,7 @@ import type { YouTubeComment } from "@/server/youtube/client";
 // 重複防止：同じ YouTube コメントID は1行だけ（DB の (video_id, external_comment_id) ユニーク制約でも保証）。
 // 本文変更の検知：本文の SHA-256 を body_hash に保存し、次に同じコメントを取得したときに比べる。
 //   - 新規コメント        → INSERT（分析対象）
-//   - 本文が変わったもの  → UPDATE（updated_at が自動で更新され、再分析対象になる）
+//   - 本文が変わったもの  → UPDATE（updated_at が自動で更新される）。古い分析結果を is_latest = false にして、再分析対象にする
 //   - 変わっていないもの  → 何もしない（いいね数などのメタデータの変化では、再分析しない）
 //
 // MVP では、コメントを取得するのは動画の登録時だけ（要件定義書7.4）。
@@ -113,6 +113,14 @@ async function saveBatch(
       })
       .eq("id", row.id);
     if (updateError) throw updateError;
+    // 古い分析結果を「最新ではない」にする（履歴として残す。要件定義書13.2）。
+    // 最新の結果がなくなるので、このコメントは「まだ分析されていない」コメントとして、もう一度分析される。
+    const { error: analysisError } = await admin
+      .from("comment_analysis")
+      .update({ is_latest: false })
+      .eq("comment_id", row.id)
+      .eq("is_latest", true);
+    if (analysisError) throw analysisError;
     total.updated += 1;
   }
 

@@ -6,7 +6,7 @@ import {
   isExpired,
 } from "@/lib/config/retention";
 
-import { DAY_MS, HOUR_MS } from "./helpers/db";
+import { DAY_MS, HOUR_MS } from "./helpers/time";
 
 // 期限判定の純関数のテスト（DB 不要）。境界の前後で判定が切り替わることを確かめる。
 describe("isExpired（保持期間の判定）", () => {

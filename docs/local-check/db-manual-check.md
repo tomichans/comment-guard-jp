@@ -1,6 +1,5 @@
-# DBの手動確認の一覧
+# DBの手動確認の一覧（～メイン画面作成時点）
 
-[db-register-delete-test-list.md](db-register-delete-test-list.md) のうち、自動テストがまだない、または一部だけの項目（✗ と △）を抜き出したものです。自動テストで確かめられている項目は入れていません。
 
 ## 準備
 

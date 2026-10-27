@@ -1,5 +1,7 @@
 import "server-only";
 
+import { DEFAULT_CLASSIFY_MODEL } from "@/lib/config/analysis";
+
 // =============================================================
 // サーバー専用の環境変数
 //
@@ -38,5 +40,13 @@ export const serverEnv = {
   // ゲストのIPアドレスを変換（HMAC）するための秘密の鍵。src/server/ip.ts を参照。
   get ipHashSecret() {
     return required("IP_HASH_SECRET");
+  },
+  // OpenAI の APIキー。コメントの分類（AI）と NG判定（Moderation API）に使う。
+  get openaiApiKey() {
+    return required("OPENAI_API_KEY");
+  },
+  // 分類に使うモデル名。未設定なら src/lib/config/analysis.ts の既定のモデルを使う。
+  get openaiClassifyModel() {
+    return process.env.OPENAI_CLASSIFY_MODEL || DEFAULT_CLASSIFY_MODEL;
   },
 };

@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { deleteOwnedVideo, findOwnedVideo } from "@/server/access";
+import {
+  deleteOwnedVideo,
+  findOwnedVideo,
+  getAnalysisSummaryOfOwnedVideo,
+} from "@/server/access";
 import { getRequestOwner } from "@/server/owner";
 
-// GET /api/videos/:id：動画1件
+// GET /api/videos/:id：動画1件と、コメントの分析の進み具合
+// 成功：{ video, analysis: { status, total, analyzed, counts } }（analysis は src/server/access.ts の AnalysisSummary）
 // 他人の動画・期限切れ・存在しない、はすべて同じ 404 にする（存在を推測させないため）。
 export async function GET(
   _request: Request,
@@ -12,10 +17,11 @@ export async function GET(
   const { id } = await params;
   const owner = await getRequestOwner();
   const video = owner ? await findOwnedVideo(owner, id) : null;
-  if (!video) {
+  const analysis = owner && video ? await getAnalysisSummaryOfOwnedVideo(owner, video.id) : null;
+  if (!video || !analysis) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  return NextResponse.json({ video });
+  return NextResponse.json({ video, analysis });
 }
 
 // DELETE /api/videos/:id：自分の動画を削除する（要件定義書18.2）

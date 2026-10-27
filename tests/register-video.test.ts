@@ -5,7 +5,7 @@ import { VideoError } from "@/server/video-errors";
 import { registerVideo, type Registrant } from "@/server/videos/register";
 
 import { fakeYouTube, page } from "./helpers/fake-youtube";
-import { admin, cleanup, createTestUser, newGuestId } from "./helpers/db";
+import { HOUR_MS, admin, ago, cleanup, createTestUser, newGuestId } from "./helpers/db";
 
 // =============================================================
 // 動画の登録とコメントの取得（要件定義書3.1、7章）
@@ -14,15 +14,20 @@ import { admin, cleanup, createTestUser, newGuestId } from "./helpers/db";
 
 const URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
-function guest(ipHash: string | null = `ip-${crypto.randomUUID()}`): Registrant {
+type GuestRegistrant = Extract<Registrant, { kind: "guest" }>;
+
+/** 新しいゲストを作る。ipHash を省くと、毎回別の IP から来たことになる。 */
+function guest(ipHash: string | null = `ip-${crypto.randomUUID()}`): GuestRegistrant {
   return { kind: "guest", guestId: newGuestId(), ipHash };
 }
 
+/** 新しいログインユーザーを作る。 */
 async function user(): Promise<Registrant> {
   const u = await createTestUser();
   return { kind: "user", userId: u.userId };
 }
 
+/** 動画の親コメントの数を返す。replies を true にすると、返信の数を返す。 */
 async function countComments(videoId: string, replies = false) {
   const query = admin.from("comments").select("id", { count: "exact", head: true }).eq("video_id", videoId);
   const { count, error } = await (replies
@@ -32,6 +37,7 @@ async function countComments(videoId: string, replies = false) {
   return count;
 }
 
+/** 動画の API 使用量の記録を、古い順に返す。 */
 async function usageOf(videoId: string) {
   const { data, error } = await admin
     .from("api_usage_logs")
@@ -42,6 +48,7 @@ async function usageOf(videoId: string) {
   return data;
 }
 
+/** promise が、code のエラー（VideoError）で失敗することを確かめる。 */
 async function expectVideoError(promise: Promise<unknown>, code: string) {
   await expect(promise).rejects.toBeInstanceOf(VideoError);
   await expect(promise).rejects.toMatchObject({ code });
@@ -97,7 +104,7 @@ describe("動画の登録", () => {
       service: "youtube",
       units: 1,
       succeeded: true,
-      guest_id: g.kind === "guest" ? g.guestId : null,
+      guest_id: g.guestId,
       ip_hash: "ip-usage-test",
       user_id: null,
     });
@@ -125,7 +132,7 @@ describe("動画の登録", () => {
       const { data } = await admin
         .from("videos")
         .select("id")
-        .eq("guest_id", g.kind === "guest" ? g.guestId : "");
+        .eq("guest_id", g.guestId);
       expect(data).toHaveLength(0);
     }
   });
@@ -149,7 +156,7 @@ describe("ゲストの上限（要件定義書3.1）", () => {
     // 25時間前に作られたことにする（ゲストの保持期間は24時間）
     await admin
       .from("videos")
-      .update({ created_at: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString() })
+      .update({ created_at: ago(25 * HOUR_MS) })
       .eq("id", video.id);
 
     const second = await registerVideo(g, URL, fakeYouTube({ pages: [page("b", 1, null)] }));
