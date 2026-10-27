@@ -207,7 +207,7 @@ CHECK (
 | `score` | numeric(3,2) | no |  | `primary_category` の判定確信度（0.00〜1.00） |
 | `review_required` | boolean | no | | 人のレビューが必要か（条件は要件定義書9.2） |
 | `group_id` | uuid | no | → `comment_groups.id` | 所属グループ。グループ対象外のコメント（`harmful` / `spam` を含む）は `NULL`。1コメントにつき最大1グループ |
-| `embedding` | vector(1536) | no |  | コメント本文のEmbedding変換後の値（`text-embedding-3-small`）。対象外は `NULL` |
+| `embedding` | vector(1536) | no |  | コメント本文のEmbedding変換後の値（`text-embedding-3-small`）。対象外は `NULL`。分類の結果を INSERT した後に、`group_id` と一緒に UPDATE で書き込む【確定】（要件定義書10.3） |
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 
 - `actionable_flag`、`actionable_score`、`actionable_reason` は持たない【確定】。建設的な指摘の抽出は、`primary_category` と `labels` で行う（要件定義書10.1）。
@@ -229,12 +229,14 @@ CHECK (
 | `group_type` | enum | yes |  | どちらのランキングの対象か（4.3参照） |
 | `representative_text` | text | yes |  | LLMが生成する代表論点のテキスト（例：「音声・ナレーションが聞き取りづらい」） |
 | `representative_embedding` | vector(1536) | yes |  | 新規コメントとの類似度比較の基準値。新規グループ作成時点のコメントのembeddingをそのまま格納する |
-| `comment_count` | integer | yes |  | グループに属するコメント数（ランキングのソートキー） |
+| `comment_count` | integer | yes |  | グループに属するコメント数（ランキングのソートキー）。最新の分析結果（`is_latest = true`）のうち、このグループに入っているものを、そのつど数え直して保存する【確定】（`refresh_group_counts`。要件定義書10.3） |
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 | `updated_at` | timestamptz | yes |  | レコード更新日時 |
 
 - 類似度の閾値は0.82。LLMは、新規グループ作成時の `representative_text` 生成にのみ使う。
 - `representative_embedding` は、既存グループへの合流時に更新しない【確定】。
+- `comment_count` が0のグループ（コメントが分析し直されて、別のグループに移った）は削除せず、ランキングに出さない【確定】。
+- 対象は親コメントだけ（返信は対象外）【確定】（要件定義書10.1）。
 - 1コメントが所属するグループは1つだけ。`primary_category = 'question'` なら `question`、それ以外で `feedback` または `labels` に `request` を含めば `feedback_request`（要件定義書10.1）。
 
 ### 5.5 ng_words（NGワード辞書）
@@ -309,7 +311,7 @@ CHECK (
 | --- | --- | --- | --- | --- |
 | `id` | uuid | yes | PK | 主キー |
 | `service` | text | yes |  | `'youtube'` または `'openai'` |
-| `endpoint` | text | yes |  | 呼んだAPI（`'videos.list'`、`'commentThreads.list'`、`'classify'`（分類のAI）、`'moderations'`（Moderation API）） |
+| `endpoint` | text | yes |  | 呼んだAPI（`'videos.list'`、`'commentThreads.list'`、`'classify'`（分類のAI）、`'moderations'`（Moderation API）、`'embeddings'`（グルーピングの Embedding）、`'group_names'`（グループの代表論点の文章づくり）） |
 | `units` | integer | no |  | YouTube APIのクォータ消費量 |
 | `model` | text | no |  | AIのモデル名 |
 | `input_tokens` | integer | no |  | AIの入力トークン数 |
@@ -386,14 +388,17 @@ ON videos(created_at);
 
 ## 7. 関数（SQL）【確定】
 
-PostgREST（supabase-js）のクエリでは書きにくい集計・検索を、SQL の関数にしている（`supabase/migrations/20261026000001_analysis_status.sql`）。
+PostgREST（supabase-js）のクエリでは書きにくい集計・検索を、SQL の関数にしている（`supabase/migrations/20261026000001_analysis_status.sql`、`20261027000001_grouping.sql`）。
 
 | 関数 | 返す値 | 実行できるロール | 用途 |
 | --- | --- | --- | --- |
 | `comments_to_analyze(p_video_id, p_limit)` | `comments` の行（親コメントを先に） | `service_role` のみ | まだ分析されていない（`is_latest = true` の分析結果がない）コメントを探す |
 | `video_analysis_summary(p_video_id)` | json（`total`、`analyzed`、`counts`） | `authenticated`、`service_role` | 分析の進み具合と、タブごとの件数（親コメントの `primary_category` ごとの数） |
+| `comments_to_group(p_video_id, p_limit)` | 分析結果の id、本文、`primary_category`、`labels` | `service_role` のみ | グループの対象なのに、まだ embedding のない親コメントを探す（要件定義書10.1） |
+| `refresh_group_counts(p_video_id)` | なし | `service_role` のみ | 動画のグループの `comment_count` を数え直す（要件定義書10.3） |
+| `video_rankings(p_video_id, p_limit)` | json（`feedback_request`、`question`。それぞれ `rank`、`text`、`count` の配列） | `authenticated`、`service_role` | 指摘・要望ランキングと質問ランキング（要件定義書11章の並び順） |
 
-- `video_analysis_summary` は security invoker（既定）なので、ログインユーザーが呼ぶと RLS が効き、自分の動画のコメントしか数えない。
+- `video_analysis_summary` と `video_rankings` は security invoker（既定）なので、ログインユーザーが呼ぶと RLS が効き、自分の動画のコメントしか数えない。
 
 ## 8. 未決定・要確認事項
 
