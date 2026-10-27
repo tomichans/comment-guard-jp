@@ -13,8 +13,10 @@ import {
   type CommentTab,
   type PrimaryCategory,
 } from "@/lib/comment-categories";
+import { RANKING_SIZE } from "@/lib/config/analysis";
 import { expiryCutoff, isExpired } from "@/lib/config/retention";
 import type { Database, Tables } from "@/lib/database.types";
+import type { RankingItem, VideoRankings } from "@/lib/rankings";
 import { isUuid } from "@/lib/uuid";
 import { effectiveAnalysisStatus } from "@/server/analysis/status";
 import { createAdminClient } from "@/server/supabase/admin";
@@ -141,7 +143,7 @@ const ONLY_ANALYZED = "*, comment_analysis!inner(primary_category, labels, revie
  *
  * comments は所有者の列を持たない（所有者は videos だけが持つ。要件定義書13.2）。
  * そのため、必ず先に findOwnedVideo() で動画の所有を確認してから、その動画の id でコメントを読む。
- * 子テーブル（comment_analysis、comment_groups、advice_logs）を読む関数も、同じ形にする。
+ * 子テーブル（comment_analysis、comment_groups、advice_logs）を読む関数も、同じ形にする（getRankingsOfOwnedVideo など）。
  *
  * 並べ替え・検索・タブの絞り込み・件数の区切りは、親コメントに対して行う。返信は、そのページの親コメントの分だけ読む。
  *
@@ -250,6 +252,27 @@ export async function getAnalysisSummaryOfOwnedVideo(
   if (status === "failed") counts.all = await countParents(owner, video.id);
 
   return { status, total: summary.total, analyzed: summary.analyzed, counts };
+}
+
+/**
+ * 自分の動画の、指摘・要望ランキングと質問ランキング（上位3件ずつ。要件定義書11章）。動画が自分のものでなければ null。
+ * 並び順は SQL の関数 video_rankings に書いてある。
+ */
+export async function getRankingsOfOwnedVideo(
+  owner: Owner,
+  videoId: string,
+  now: Date = new Date(),
+): Promise<VideoRankings | null> {
+  const video = await findOwnedVideo(owner, videoId, now);
+  if (!video) return null;
+
+  const [status, { data, error }] = await Promise.all([
+    effectiveAnalysisStatus(video, now),
+    clientFor(owner).rpc("video_rankings", { p_video_id: video.id, p_limit: RANKING_SIZE }),
+  ]);
+  if (error) throw error;
+  const rankings = data as { feedback_request: RankingItem[]; question: RankingItem[] };
+  return { status, feedbackRequest: rankings.feedback_request, question: rankings.question };
 }
 
 async function countParents(owner: Owner, videoId: string): Promise<number> {
