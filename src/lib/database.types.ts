@@ -216,14 +216,27 @@ isOneToOne: false
           }
           Functions: {
             "comments_to_analyze":
-{ Args: { "p_limit": number,"p_video_id": string }; Returns: Database["public"]["Tables"]["comments"]["Row"][]
-  SetofOptions: {
-    from: "*"
-    to: "comments"
-    isOneToOne: false
-    isSetofReturn: true
-  }
-                           },"video_analysis_summary":
+{ Args: { "p_limit": number,"p_video_id": string }; Returns: {
+              "author": string | null,
+"body_hash": string | null,
+"comment_text": string,
+"created_at": string,
+"external_comment_id": string | null,
+"id": string,
+"like_count": number | null,
+"parent_comment_id": string | null,
+"posted_at": string | null,
+"reply_count": number | null,
+"updated_at": string,
+"video_id": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "comments"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
+"video_analysis_summary":
 { Args: { "p_video_id": string }; Returns: Json
                            }
           }
