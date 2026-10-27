@@ -939,7 +939,7 @@ erDiagram
 
 | レイヤー | 技術・サービス | 方針 |
 | --- | --- | --- |
-| フレームワーク | Next.js 16.2.0 | Webアプリケーション基盤 |
+| フレームワーク | Next.js 16.4.3 | Webアプリケーション基盤 |
 | UI | shadcn/ui | UIコンポーネント |
 | CSS | Tailwind CSS | スタイリング |
 | DB | Supabase PostgreSQL | データ保存 |
@@ -949,6 +949,8 @@ erDiagram
 | コメント取得 | YouTube Data API | YouTubeデータ取得 |
 
 - Embeddingモデル：OpenAI `text-embedding-3-small`【確定】
+- Next.js のバージョン【確定】：16.4.3（`package.json` で固定。`eslint-config-next` も同じ版）。
+  - 理由：16.2.0 に、認証なしで遠隔からプログラムを実行される脆弱性（critical）などが見つかり、`npm audit` で指摘されたため（2026年10月）。`npm audit fix --force` は使わず、版を指定して更新した。
 - shadcn/ui のスタイル【確定】：`radix-nova`（Nova プリセット、Radix ベース、baseColor は neutral）。コンポーネントは公式 CLI（`npx shadcn@latest add <名前>`）で追加し、手でコピーしない。
   - 理由：公式の現行の既定スタイルで、CLI の出力をそのまま使えば、アクセシビリティ対応や依存関係が公式と一致するため。手でコピーすると古い版が混ざる（スライス1で発生）。
   - Radix ベースにしたのは、既存コードが Radix の書き方（`asChild`）を使っているため。
