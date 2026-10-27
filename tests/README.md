@@ -43,7 +43,7 @@ describe("まとまりの名前", () => {      // 関係するテストをまと
 本物の YouTube や OpenAI に問い合わせると、APIキーと費用が必要で、結果も毎回変わります。そこで、決まった答えを返す偽物を使います。
 
 - `helpers/fake-youtube.ts`：偽物の YouTube。`page("p1", 100, "NEXT")` は「100スレッドあり、続きがある」ページ。
-- `helpers/fake-ai.ts`：偽物の AI。本文に「？」があれば質問、「してほしい」があれば指摘・要望、それ以外はポジティブ。「攻撃」を含むと Moderation API が攻撃的と判定します。
+- `helpers/fake-ai.ts`：偽物の AI。本文に「？」があれば質問、「してほしい」があれば指摘・要望、それ以外はポジティブ。「攻撃」を含むと Moderation API が攻撃的と判定します。Embedding は、「音」「字幕」「曲」「機材」のどれかを含む本文が、話題ごとに同じベクトルになります（＝同じグループに入る）。
 
 アプリの関数は、引数で渡された YouTube や AI を使うように作ってあります。本番では本物を、テストでは偽物を渡します（「依存性の注入」と呼ばれる書き方）。
 
@@ -63,19 +63,21 @@ describe("まとまりの名前", () => {      // 関係するテストをまと
 
 ## 5. おすすめの読む順番
 
-やさしい順に並べています。上の3つは DB を使わない「関数に値を入れて、出てきた値を比べる」だけのテストです。
+やさしい順に並べています。上の4つは DB を使わない「関数に値を入れて、出てきた値を比べる」だけのテストです。
 
 1. `youtube-url.test.ts`：URL から動画IDを取り出す。`it.each` の例
 2. `retention.test.ts`：保持期間の判定。境界（ちょうど24時間）の前後を確かめる例
 3. `analysis-rules.test.ts`：NGワードの判定と、最終的な分類の決め方
-4. `youtube-client.test.ts`：YouTube の応答をアプリの形に変換する
-5. `guest-limit.test.ts`：DB の制約（ユニーク・CHECK）がエラーを出すことを確かめる
-6. `access-guest.test.ts`：ゲストAがゲストBのデータを読めないこと（要件定義書0.3で必須のテスト）
-7. `access-user-rls.test.ts`：ログインユーザーの RLS
-8. `retention-read.test.ts`、`purge-expired.test.ts`、`migrate-guest.test.ts`、`delete-video.test.ts`：保持期間と削除・引継ぎ
-9. `comment-threads.test.ts`：コメント一覧の並び順・検索・続きの読み込み
-10. `register-video.test.ts`：偽物の YouTube を使った、動画の登録とコメントの取得
-11. `analyze.test.ts`：偽物の AI を使った、コメントの分析
+4. `grouping.test.ts`：グループへの振り分け（類似度の閾値）。要件定義書0.3で必須の「グルーピングロジック」のテスト
+5. `youtube-client.test.ts`：YouTube の応答をアプリの形に変換する
+6. `guest-limit.test.ts`：DB の制約（ユニーク・CHECK）がエラーを出すことを確かめる
+7. `access-guest.test.ts`：ゲストAがゲストBのデータを読めないこと（要件定義書0.3で必須のテスト）
+8. `access-user-rls.test.ts`：ログインユーザーの RLS
+9. `retention-read.test.ts`、`purge-expired.test.ts`、`migrate-guest.test.ts`、`delete-video.test.ts`：保持期間と削除・引継ぎ
+10. `comment-threads.test.ts`：コメント一覧の並び順・検索・続きの読み込み
+11. `register-video.test.ts`：偽物の YouTube を使った、動画の登録とコメントの取得
+12. `analyze.test.ts`：偽物の AI を使った、コメントの分析
+13. `group-comments.test.ts`：偽物の AI を使った、グルーピングとランキング
 
 ## 6. 注意すること
 

@@ -1,4 +1,4 @@
-import type { AnalysisAi, ClassifyInput } from "@/server/analysis/ai";
+import type { AnalysisAi, ClassifyInput, GroupNameInput } from "@/server/analysis/ai";
 import type { AiClassification, ModerationResult } from "@/server/analysis/rules";
 
 // =============================================================
@@ -14,13 +14,24 @@ import type { AiClassification, ModerationResult } from "@/server/analysis/rules
 //   - それ以外             → praise
 // Moderation API のルール
 //   - 「攻撃」を含む       → flagged（攻撃的と判定された）
+// Embedding のルール（グルーピング）
+//   - 「音」「字幕」「曲」「機材」のどれかを含むと、その話題ごとに決まったベクトルになる（同じ話題なら類似度 1）
+//   - どれも含まなければ、本文ごとに違うベクトルになる（他のコメントとの類似度 0）
+// 代表論点のルール
+//   - 「代表：」＋最初の1件の本文
 // =============================================================
+
+/** Embedding の話題。この語を含む本文は、同じベクトルになる（＝同じグループになる）。 */
+const EMBEDDING_TOPICS = ["音", "字幕", "曲", "機材"];
+const EMBEDDING_DIMENSIONS = 1536;
 
 export type FakeAi = AnalysisAi & {
   /** classify に渡された本文の記録。1回の呼び出しが1つの配列（[[1回目の本文...], [2回目の本文...]]） */
   classified: string[][];
   /** classify に渡された NGワードのヒントの記録（本文 → ヒント） */
   hints: Map<string, string[]>;
+  /** embed に渡された本文の記録（classified と同じ形） */
+  embedded: string[][];
 };
 
 function classifyOne(text: string): AiClassification {
@@ -37,17 +48,35 @@ function moderateOne(text: string): ModerationResult {
   return text.includes("攻撃") ? { flagged: true, maxScore: 0.9 } : { flagged: false, maxScore: 0.01 };
 }
 
+/** 1つの次元だけが 1 のベクトル（違う次元のベクトルどうしは、類似度 0 になる）。 */
+function embedOne(text: string): number[] {
+  const topic = EMBEDDING_TOPICS.findIndex((word) => text.includes(word));
+  let dimension = topic;
+  if (topic === -1) {
+    // 本文から決まる番号（話題の次元とは重ならないようにする）
+    let hash = 0;
+    for (const char of text) hash = (hash * 31 + char.codePointAt(0)!) % 1_000_003;
+    dimension = EMBEDDING_TOPICS.length + (hash % (EMBEDDING_DIMENSIONS - EMBEDDING_TOPICS.length));
+  }
+  const vector = Array<number>(EMBEDDING_DIMENSIONS).fill(0);
+  vector[dimension] = 1;
+  return vector;
+}
+
 /**
  * 偽物の AI を作る。
  * failOnCall に番号（1から数える）を渡すと、その回の classify でエラーを投げる（AI の障害を再現する）。
+ * failEmbedding を true にすると、embed が毎回エラーを投げる。
  */
-export function fakeAi(opts: { failOnCall?: number } = {}): FakeAi {
+export function fakeAi(opts: { failOnCall?: number; failEmbedding?: boolean } = {}): FakeAi {
   const classified: string[][] = [];
+  const embedded: string[][] = [];
   const hints = new Map<string, string[]>();
 
   return {
     classified,
     hints,
+    embedded,
 
     async classify(inputs: ClassifyInput[]) {
       classified.push(inputs.map((input) => input.text));
@@ -60,6 +89,16 @@ export function fakeAi(opts: { failOnCall?: number } = {}): FakeAi {
 
     async moderate(texts: string[]) {
       return texts.map(moderateOne);
+    },
+
+    async embed(texts: string[]) {
+      embedded.push(texts);
+      if (opts.failEmbedding) throw new Error("Embedding の障害（テスト）");
+      return texts.map(embedOne);
+    },
+
+    async nameGroups(inputs: GroupNameInput[]) {
+      return inputs.map((input) => `代表：${input.text}`);
     },
   };
 }
