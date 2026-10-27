@@ -236,8 +236,22 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"comments_to_group":
+{ Args: { "p_limit": number,"p_video_id": string }; Returns: {
+              "analysis_id": string,
+"comment_text": string,
+"labels": (string)[],
+"primary_category": Database["public"]['Enums']["primary_category"]
+            }[]
+                           },
+"refresh_group_counts":
+{ Args: { "p_video_id": string }; Returns: undefined
+                           },
 "video_analysis_summary":
 { Args: { "p_video_id": string }; Returns: Json
+                           },
+"video_rankings":
+{ Args: { "p_limit": number,"p_video_id": string }; Returns: Json
                            }
           }
           Enums: {

@@ -53,4 +53,22 @@ export const ANALYSIS_STALLED_MS = 5 * 60 * 1000;
  */
 export const AI_PRICES_PER_MILLION_TOKENS: Record<string, { input: number; output: number }> = {
   "gpt-6-luna": { input: 0.1, output: 0.5 },
+  // Embedding は出力のトークンがないので、output は 0。
+  "text-embedding-3-small": { input: 0.02, output: 0 },
 };
+
+// -------------------------------------------------------------
+// グルーピングとランキング（要件定義書10章、11章。スライス4）
+// -------------------------------------------------------------
+
+/** グルーピングに使う Embedding のモデル【確定】（要件定義書10.2）。次元数は 1536（DB の vector(1536)）。 */
+export const EMBEDDING_MODEL = "text-embedding-3-small";
+
+/** これ以上似ていれば、既存のグループに合流させる（コサイン類似度）【確定】（要件定義書10.2） */
+export const GROUP_SIMILARITY_THRESHOLD = 0.82;
+
+/** グルーピングで、1回にまとめて扱うコメントの数（Embedding の1回の呼び出しで送る数） */
+export const GROUP_BATCH_SIZE = 100;
+
+/** ランキングに表示する数【確定】：どちらのランキングも1〜3位まで（要件定義書11章） */
+export const RANKING_SIZE = 3;
