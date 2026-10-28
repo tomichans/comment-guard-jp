@@ -13,7 +13,7 @@ import { admin, cleanup, insertVideo, newGuestId } from "./helpers/db";
 // AI は偽物（tests/helpers/fake-ai.ts）を使う。
 //   - 「？」を含む → 質問、「してほしい」を含む → 指摘・要望、それ以外 → ポジティブ
 //   - 「音」「字幕」「曲」「機材」のどれかを含む本文は、その話題ごとに同じ Embedding になる（＝同じグループ）
-//   - 代表論点は「代表：」＋最初の1件の本文
+//   - 質問と指摘・要望の論点は「論点：」＋本文。グループの見出し（代表論点）は、最初の1件の論点
 // DB はローカルの Supabase を使う。
 // =============================================================
 
@@ -80,13 +80,16 @@ describe("似たコメントをグループにまとめる（要件定義書10�
     ]);
 
     // 実行
-    await analyzeVideoComments(video, { ai: fakeAi() });
+    const ai = fakeAi();
+    await analyzeVideoComments(video, { ai });
 
-    // 確認：グループは3つ。代表論点は、最初の1件（古いコメント）から作られる
+    // 確認：分類の AI には、動画のタイトルも渡している（論点から動画の主題を省くため）
+    expect(ai.videoTitles[0]).toBe(video.title);
+    // 確認：グループは3つ。見出し（代表論点）は、最初の1件（古いコメント）の論点
     expect(await groupCounts(video.id)).toEqual({
-      "代表：音が小さいので直してほしい": 2,
-      "代表：字幕を表示してほしい": 1,
-      "代表：この曲は何ですか？": 1,
+      "論点：音が小さいので直してほしい": 2,
+      "論点：字幕を表示してほしい": 1,
+      "論点：この曲は何ですか？": 1,
     });
     // ポジティブのコメントはグループに入らず、embedding も作らない
     expect(await groupOf(video.id, "最高でした")).toEqual({ groupId: null, hasEmbedding: false });
@@ -104,9 +107,9 @@ describe("似たコメントをグループにまとめる（要件定義書10�
     const ai = fakeAi();
     await analyzeVideoComments(video, { ai });
 
-    // 確認：Embedding を作ったのは、親コメントの1件だけ
-    expect(ai.embedded.flat()).toEqual(["字幕を表示してほしい"]);
-    expect(await groupCounts(video.id)).toEqual({ "代表：字幕を表示してほしい": 1 });
+    // 確認：Embedding を作ったのは、親コメントの1件の論点だけ（本文ではなく論点を比べる）
+    expect(ai.embedded.flat()).toEqual(["論点：字幕を表示してほしい"]);
+    expect(await groupCounts(video.id)).toEqual({ "論点：字幕を表示してほしい": 1 });
   });
 
   it("本文が変わって別のグループに移ったコメントは、元のグループの件数から抜ける", async () => {
@@ -116,7 +119,7 @@ describe("似たコメントをグループにまとめる（要件定義書10�
       { text: "BGMの音を小さくしてほしい" },
     ]);
     await analyzeVideoComments(video, { ai: fakeAi() });
-    expect(await groupCounts(video.id)).toEqual({ "代表：音が小さいので直してほしい": 2 });
+    expect(await groupCounts(video.id)).toEqual({ "論点：音が小さいので直してほしい": 2 });
 
     // 実行：同じコメント（外部ID）の本文が変わったものとして保存し、もう一度分析する
     await saveComments(admin, video.id, [
@@ -134,8 +137,8 @@ describe("似たコメントをグループにまとめる（要件定義書10�
 
     // 確認：件数は数え直されて、音は1件、字幕は1件
     expect(await groupCounts(video.id)).toEqual({
-      "代表：音が小さいので直してほしい": 1,
-      "代表：字幕を表示してほしい": 1,
+      "論点：音が小さいので直してほしい": 1,
+      "論点：字幕を表示してほしい": 1,
     });
   });
 
@@ -156,7 +159,7 @@ describe("似たコメントをグループにまとめる（要件定義書10�
 
     // 確認：AI の分類は呼ばれずに、グループに入った
     expect(ai.classified.flat()).toEqual([]);
-    expect(await groupCounts(video.id)).toEqual({ "代表：字幕を表示してほしい": 1 });
+    expect(await groupCounts(video.id)).toEqual({ "論点：字幕を表示してほしい": 1 });
   });
 });
 
@@ -182,9 +185,9 @@ describe("ランキング（要件定義書11章）", () => {
     expect(rankings).toEqual({
       status: "done",
       feedbackRequest: [
-        { rank: 1, text: "代表：音が小さいので直してほしい", count: 2 },
-        { rank: 2, text: "代表：曲名を概要欄に記載してほしい", count: 1 },
-        { rank: 3, text: "代表：字幕を表示してほしい", count: 1 },
+        { rank: 1, text: "論点：音が小さいので直してほしい", count: 2 },
+        { rank: 2, text: "論点：曲名を概要欄に記載してほしい", count: 1 },
+        { rank: 3, text: "論点：字幕を表示してほしい", count: 1 },
       ],
       question: [],
     });
@@ -201,8 +204,8 @@ describe("ランキング（要件定義書11章）", () => {
     const rankings = await getRankingsOfOwnedVideo(owner, video.id);
 
     expect(rankings?.question.map((r) => r.text)).toEqual([
-      "代表：字幕はどこで設定できますか？",
-      "代表：この曲は何ですか？",
+      "論点：字幕はどこで設定できますか？",
+      "論点：この曲は何ですか？",
     ]);
   });
 
@@ -213,7 +216,7 @@ describe("ランキング（要件定義書11章）", () => {
     const { data: comment } = await admin.from("comments").select("id").eq("video_id", video.id).single();
     await admin.from("comment_analysis").update({ is_latest: false }).eq("comment_id", comment!.id);
     await admin.rpc("refresh_group_counts", { p_video_id: video.id });
-    expect(await groupCounts(video.id)).toEqual({ "代表：字幕を表示してほしい": 0 });
+    expect(await groupCounts(video.id)).toEqual({ "論点：字幕を表示してほしい": 0 });
 
     const rankings = await getRankingsOfOwnedVideo(owner, video.id);
 

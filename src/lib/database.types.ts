@@ -71,14 +71,14 @@ isOneToOne: false
                   ]
                 },"comment_analysis": {
                   Row: {
-                    "analyzed_at": string,"comment_id": string,"created_at": string,"embedding": string | null,"group_id": string | null,"id": string,"is_latest": boolean,"labels": (string)[],"ng_words": (string)[] | null,"primary_category": Database["public"]['Enums']["primary_category"],"review_required": boolean | null,"score": number | null
+                    "analyzed_at": string,"comment_id": string,"created_at": string,"embedding": string | null,"group_id": string | null,"id": string,"is_latest": boolean,"labels": (string)[],"ng_words": (string)[] | null,"primary_category": Database["public"]['Enums']["primary_category"],"review_required": boolean | null,"score": number | null,"topic": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "analyzed_at": string,"comment_id": string,"created_at"?: string,"embedding"?: string | null,"group_id"?: string | null,"id"?: string,"is_latest"?: boolean,"labels"?: (string)[],"ng_words"?: (string)[] | null,"primary_category": Database["public"]['Enums']["primary_category"],"review_required"?: boolean | null,"score"?: number | null
+                    "analyzed_at": string,"comment_id": string,"created_at"?: string,"embedding"?: string | null,"group_id"?: string | null,"id"?: string,"is_latest"?: boolean,"labels"?: (string)[],"ng_words"?: (string)[] | null,"primary_category": Database["public"]['Enums']["primary_category"],"review_required"?: boolean | null,"score"?: number | null,"topic"?: string | null
                   }
                   Update: {
-                    "analyzed_at"?: string,"comment_id"?: string,"created_at"?: string,"embedding"?: string | null,"group_id"?: string | null,"id"?: string,"is_latest"?: boolean,"labels"?: (string)[],"ng_words"?: (string)[] | null,"primary_category"?: Database["public"]['Enums']["primary_category"],"review_required"?: boolean | null,"score"?: number | null
+                    "analyzed_at"?: string,"comment_id"?: string,"created_at"?: string,"embedding"?: string | null,"group_id"?: string | null,"id"?: string,"is_latest"?: boolean,"labels"?: (string)[],"ng_words"?: (string)[] | null,"primary_category"?: Database["public"]['Enums']["primary_category"],"review_required"?: boolean | null,"score"?: number | null,"topic"?: string | null
                   }
                   Relationships: [
                     {
@@ -241,7 +241,8 @@ isOneToOne: false
               "analysis_id": string,
 "comment_text": string,
 "labels": (string)[],
-"primary_category": Database["public"]['Enums']["primary_category"]
+"primary_category": Database["public"]['Enums']["primary_category"],
+"topic": string | null
             }[]
                            },
 "refresh_group_counts":

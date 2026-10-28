@@ -17,7 +17,7 @@ const NG_WORDS: NgWord[] = [
   { word: "ゴミ", normalized: "ごみ", severity: 3 },
 ];
 
-const praise: AiClassification = { primaryCategory: "praise", labels: ["positive"], score: 0.9 };
+const praise: AiClassification = { primaryCategory: "praise", labels: ["positive"], score: 0.9, topic: null };
 
 describe("matchNgWords：NGワードの検出", () => {
   it("語そのものにヒットする", () => {
@@ -63,7 +63,7 @@ describe("decideAnalysis：最終的な分類", () => {
   });
 
   it("harmful で確信度が0.7未満なら、人の確認が必要", () => {
-    const d = decideAnalysis(noHit, { primaryCategory: "harmful", labels: ["insult"], score: 0.6 }, null);
+    const d = decideAnalysis(noHit, { primaryCategory: "harmful", labels: ["insult"], score: 0.6, topic: null }, null);
     expect(d.reviewRequired).toBe(true);
   });
 

@@ -57,6 +57,8 @@ export type AiClassification = {
   labels: CommentLabel[];
   /** primary_category の確信度（0〜1） */
   score: number;
+  /** 論点（グルーピングに使う。要件定義書10.3）。グループの対象でないコメントは null */
+  topic: string | null;
 };
 
 /** Moderation API の結果（1コメント分） */

@@ -55,7 +55,7 @@ export function runAfterRegister(
  * fetching を渡すと、分析するコメントがなくなっても、その取得が終わるまで待ってから、取得した分も分析する。
  */
 export async function analyzeVideoComments(
-  video: Pick<Video, "id" | "user_id" | "guest_id">,
+  video: Pick<Video, "id" | "user_id" | "guest_id" | "title">,
   { ai = openAiAnalysis, fetching = null }: { ai?: AnalysisAi; fetching?: Promise<void> | null } = {},
 ): Promise<void> {
   const admin = createAdminClient();
@@ -82,7 +82,7 @@ export async function analyzeVideoComments(
       const batches = chunk(comments, CLASSIFY_BATCH_SIZE);
       // 1つのまとまりが失敗しても、他のまとまりは最後まで終わらせてから止める（分析できた分は保存しておく）。
       const settled = await Promise.allSettled(
-        batches.map((batch) => analyzeBatch(admin, batch, ngWords, ai, ctx)),
+        batches.map((batch) => analyzeBatch(admin, batch, video.title, ngWords, ai, ctx)),
       );
       // 分類できた分を、グループに振り分ける（要件定義書10章）。1まわりごとに行うので、ランキングも少しずつ出てくる。
       // 分類するコメントがない回も呼ぶ。前回の分析で、分類は済んだがグループに入っていないコメントを拾うため。
@@ -127,6 +127,7 @@ export async function analyzeVideoComments(
 async function analyzeBatch(
   admin: AdminClient,
   comments: Comment[],
+  videoTitle: string,
   ngWords: NgWord[],
   ai: AnalysisAi,
   ctx: UsageContext,
@@ -141,6 +142,7 @@ async function analyzeBatch(
       : await Promise.all([
           ai.classify(
             toAi.map((i) => ({ text: comments[i].comment_text, ngHints: matches[i].words })),
+            videoTitle,
             ctx,
           ),
           ai.moderate(
@@ -153,9 +155,10 @@ async function analyzeBatch(
   const analyzedAt = new Date().toISOString();
   const rows = comments.map((comment, i) => {
     const position = aiPosition.get(i);
+    const classification = position === undefined ? null : classifications[position];
     const decision = decideAnalysis(
       matches[i],
-      position === undefined ? null : classifications[position],
+      classification,
       position === undefined ? null : moderations[position],
     );
     return {
@@ -167,6 +170,8 @@ async function analyzeBatch(
       ng_words: decision.ngWords.length > 0 ? decision.ngWords : null,
       score: decision.score,
       review_required: decision.reviewRequired,
+      // 論点。グループの対象（要件定義書10.1）のときだけ、グルーピングで使う。
+      topic: classification?.topic ?? null,
       // グループ（group_id）と embedding は、この後の groupPendingComments で書き込む。
     };
   });

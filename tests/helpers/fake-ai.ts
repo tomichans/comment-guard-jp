@@ -1,4 +1,4 @@
-import type { AnalysisAi, ClassifyInput, GroupNameInput } from "@/server/analysis/ai";
+import type { AnalysisAi, ClassifyInput } from "@/server/analysis/ai";
 import type { AiClassification, ModerationResult } from "@/server/analysis/rules";
 
 // =============================================================
@@ -17,8 +17,8 @@ import type { AiClassification, ModerationResult } from "@/server/analysis/rules
 // Embedding のルール（グルーピング）
 //   - 「音」「字幕」「曲」「機材」のどれかを含むと、その話題ごとに決まったベクトルになる（同じ話題なら類似度 1）
 //   - どれも含まなければ、本文ごとに違うベクトルになる（他のコメントとの類似度 0）
-// 代表論点のルール
-//   - 「代表：」＋最初の1件の本文
+// 論点（topic）のルール
+//   - 質問と指摘・要望には「論点：」＋本文、それ以外は null（グルーピングでは、この論点の Embedding を比べる）
 // =============================================================
 
 /** Embedding の話題。この語を含む本文は、同じベクトルになる（＝同じグループになる）。 */
@@ -30,18 +30,20 @@ export type FakeAi = AnalysisAi & {
   classified: string[][];
   /** classify に渡された NGワードのヒントの記録（本文 → ヒント） */
   hints: Map<string, string[]>;
+  /** classify に渡された動画のタイトルの記録（呼び出しの順） */
+  videoTitles: string[];
   /** embed に渡された本文の記録（classified と同じ形） */
   embedded: string[][];
 };
 
 function classifyOne(text: string): AiClassification {
   if (text.includes("？")) {
-    return { primaryCategory: "question", labels: ["question"], score: 0.9 };
+    return { primaryCategory: "question", labels: ["question"], score: 0.9, topic: `論点：${text}` };
   }
   if (text.includes("してほしい")) {
-    return { primaryCategory: "feedback", labels: ["request"], score: 0.8 };
+    return { primaryCategory: "feedback", labels: ["request"], score: 0.8, topic: `論点：${text}` };
   }
-  return { primaryCategory: "praise", labels: ["positive"], score: 0.95 };
+  return { primaryCategory: "praise", labels: ["positive"], score: 0.95, topic: null };
 }
 
 function moderateOne(text: string): ModerationResult {
@@ -72,14 +74,17 @@ export function fakeAi(opts: { failOnCall?: number; failEmbedding?: boolean } = 
   const classified: string[][] = [];
   const embedded: string[][] = [];
   const hints = new Map<string, string[]>();
+  const videoTitles: string[] = [];
 
   return {
     classified,
     hints,
+    videoTitles,
     embedded,
 
-    async classify(inputs: ClassifyInput[]) {
+    async classify(inputs: ClassifyInput[], videoTitle: string) {
       classified.push(inputs.map((input) => input.text));
+      videoTitles.push(videoTitle);
       if (classified.length === opts.failOnCall) {
         throw new Error("AI の障害（テスト）");
       }
@@ -95,10 +100,6 @@ export function fakeAi(opts: { failOnCall?: number; failEmbedding?: boolean } = 
       embedded.push(texts);
       if (opts.failEmbedding) throw new Error("Embedding の障害（テスト）");
       return texts.map(embedOne);
-    },
-
-    async nameGroups(inputs: GroupNameInput[]) {
-      return inputs.map((input) => `代表：${input.text}`);
     },
   };
 }

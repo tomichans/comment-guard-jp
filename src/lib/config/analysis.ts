@@ -11,11 +11,12 @@
 export const DEFAULT_CLASSIFY_MODEL = "gpt-6-luna";
 
 /**
- * 分類の考える深さ（OpenAI の reasoningEffort）。
- * コメントの分類は単純な作業なので、"none"（考える工程なし）にして、速さと費用を優先する。
- * モデルを変えたときに、そのモデルが "none" に対応していなければ、ここも変える。
+ * 分類の考える深さ（OpenAI の reasoningEffort）【確定】："low"（少しだけ考える）。
+ * 当初は "none"（考える工程なし）だったが、豆知識や反語を質問に分類するなどの誤りがあったため、
+ * 迷う文を考え直せるようにした。費用と時間は少し増える（要件定義書14.1）。
+ * モデルを変えたときに、そのモデルが "low" に対応していなければ、ここも変える。
  */
-export const CLASSIFY_REASONING_EFFORT = "none";
+export const CLASSIFY_REASONING_EFFORT = "low";
 
 /** NG判定に使う OpenAI Moderation API のモデル（無料）【確定】（要件定義書9.2） */
 export const MODERATION_MODEL = "omni-moderation-latest";
@@ -66,11 +67,12 @@ export const EMBEDDING_MODEL = "text-embedding-3-small";
 
 /**
  * これ以上似ていれば、既存のグループに合流させる（コサイン類似度）【確定】（要件定義書10.2）。
- * text-embedding-3-small は、短い日本語の文だと、言い換えでも 0.5〜0.6 程度になる
- * （例：「塩加減の説明を分かりやすくしてほしい」と「塩加減を具体的に示してほしい」で 0.556）。
- * 当初の 0.82 ではほとんど合流しなかったため、0.5 にした。
+ * 比べるのは、コメント本文ではなく、分類の AI が出した論点（例：「塩加減の説明」）。
+ * 経緯：本文どうしを比べていたときは、0.82 では言い換えも合流せず（言い換えで 0.556）、
+ * 0.5 では動画の主題（料理名など）が共通なだけで別の論点が合流した。
+ * 論点は主題を含まない短い名詞句なので、言い換えは近く、別の論点は遠くなる見込み。0.6 から様子を見る。
  */
-export const GROUP_SIMILARITY_THRESHOLD = 0.5;
+export const GROUP_SIMILARITY_THRESHOLD = 0.6;
 
 /** グルーピングで、1回にまとめて扱うコメントの数（Embedding の1回の呼び出しで送る数） */
 export const GROUP_BATCH_SIZE = 100;

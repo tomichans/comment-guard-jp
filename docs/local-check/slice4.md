@@ -22,10 +22,12 @@
    - [ ] 動画を開く前（トップ画面）は、右の枠のランキングに「動画を開くと表示されます」と出る
    - [ ] 分析中は「コメントを分析しています…」と出て、分析が進むと、再読み込みしなくてもランキングが出てくる
    - [ ] 「指摘・要望ランキング」と「質問ランキング」に、それぞれ最大3位まで「1位　代表論点　◯件」の形で出る
-   - [ ] 代表論点が、コメントをそのまま写したものではなく、短い見出しになっている
+   - [ ] 代表論点が、コメントをそのまま写したものではなく、短い見出し（論点）になっている
+   - [ ] 代表論点に、動画の主題（料理名など）が入っていない
    - [ ] 件数が多い順に並んでいる
    - [ ] 「AIアドバイス」は「準備中です」のまま
-   - [ ] 似ていないコメントが同じグループに入っている、または似たコメントが別々になっている、と感じたら教えてください（閾値 0.5 の調整の参考にします）
+   - [ ] 似ていないコメントが同じグループに入っている、または似たコメントが別々になっている、と感じたら教えてください（閾値 0.6 の調整の参考にします）
+   - [ ] 質問ランキングに、豆知識や独り言、反語（「これ本当に美味しいのか？」）が入っていない
 
 ## 2. 別の動画に切り替える（ログインユーザー）
 
@@ -52,14 +54,22 @@ join comment_groups g on g.id = a.group_id
 where a.is_latest and g.video_id = (select id from videos order by created_at desc limit 1)
 order by g.representative_text;
 
--- AI の使用量と推定費用（米ドル）。embeddings と group_names が増えている
+-- コメントごとの分類と論点（新しい動画の、グループの対象のもの）
+select c.comment_text, a.primary_category, a.topic
+from comment_analysis a join comments c on c.id = a.comment_id
+where a.is_latest and a.topic is not null
+  and c.video_id = (select id from videos order by created_at desc limit 1)
+order by a.topic;
+
+-- AI の使用量と推定費用（米ドル）。embeddings が増えている
 select endpoint, model, count(*), sum(input_tokens) as input_tokens,
        sum(output_tokens) as output_tokens, sum(estimated_cost_usd) as cost_usd
 from api_usage_logs where service = 'openai' group by endpoint, model;
 ```
 
 - [ ] 返信（`parent_comment_id` があるコメント）は、グループに入っていない
-- [ ] `embeddings` と `group_names` の行があり、推定費用が入っている（100件で1円未満の見込み）
+- [ ] 論点が、コメントの中心の話題を短く言い表している。同じ話題なら、同じような言い方になっている
+- [ ] `embeddings` の行があり、推定費用が入っている（100件で1円未満の見込み）
 
 ## 4. グルーピングの失敗とやり直し（任意）
 
