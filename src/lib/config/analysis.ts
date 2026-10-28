@@ -64,8 +64,13 @@ export const AI_PRICES_PER_MILLION_TOKENS: Record<string, { input: number; outpu
 /** グルーピングに使う Embedding のモデル【確定】（要件定義書10.2）。次元数は 1536（DB の vector(1536)）。 */
 export const EMBEDDING_MODEL = "text-embedding-3-small";
 
-/** これ以上似ていれば、既存のグループに合流させる（コサイン類似度）【確定】（要件定義書10.2） */
-export const GROUP_SIMILARITY_THRESHOLD = 0.82;
+/**
+ * これ以上似ていれば、既存のグループに合流させる（コサイン類似度）【確定】（要件定義書10.2）。
+ * text-embedding-3-small は、短い日本語の文だと、言い換えでも 0.5〜0.6 程度になる
+ * （例：「塩加減の説明を分かりやすくしてほしい」と「塩加減を具体的に示してほしい」で 0.556）。
+ * 当初の 0.82 ではほとんど合流しなかったため、0.5 にした。
+ */
+export const GROUP_SIMILARITY_THRESHOLD = 0.5;
 
 /** グルーピングで、1回にまとめて扱うコメントの数（Embedding の1回の呼び出しで送る数） */
 export const GROUP_BATCH_SIZE = 100;

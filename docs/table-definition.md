@@ -233,7 +233,7 @@ CHECK (
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 | `updated_at` | timestamptz | yes |  | レコード更新日時 |
 
-- 類似度の閾値は0.82。LLMは、新規グループ作成時の `representative_text` 生成にのみ使う。
+- 類似度の閾値は0.5（要件定義書10.2）。LLMは、新規グループ作成時の `representative_text` 生成にのみ使う。
 - `representative_embedding` は、既存グループへの合流時に更新しない【確定】。
 - `comment_count` が0のグループ（コメントが分析し直されて、別のグループに移った）は削除せず、ランキングに出さない【確定】。
 - 対象は親コメントだけ（返信は対象外）【確定】（要件定義書10.1）。

@@ -44,7 +44,7 @@ describe("コサイン類似度", () => {
 describe("グループへの振り分け（assignGroups。要件定義書10.3）", () => {
   const existing = [{ id: "g-sound", groupType: "feedback_request" as const, embedding: [1, 0] }];
 
-  it("類似度が閾値（0.82）以上なら既存のグループに合流し、未満なら新しいグループを作る", () => {
+  it("類似度が閾値以上なら既存のグループに合流し、未満なら新しいグループを作る", () => {
     // 準備：閾値のすぐ上と、すぐ下のコメント
     const candidates = [
       { groupType: "feedback_request" as const, embedding: vectorWithSimilarity(GROUP_SIMILARITY_THRESHOLD + 0.01) },
@@ -92,10 +92,13 @@ describe("グループへの振り分け（assignGroups。要件定義書10.3）
   });
 
   it("グループの基準は最初の1件のまま変わらない（合流したコメントで基準がずれない）", () => {
-    // 準備：基準 [1, 0] と 0.9 似ている A と、A とは似ているが基準とは 0.82 未満の B
-    //   A：基準から約26度、B：基準から約40度（A からは約14度）
-    const a = vectorWithSimilarity(0.9);
-    const b = vectorWithSimilarity(0.76);
+    // 準備：基準 [1, 0] から少し回した A と、A からさらに同じだけ回した B
+    //   A は基準と閾値以上に似ている。B は A とは閾値以上に似ているが、基準とは閾値未満
+    //   （閾値の値を変えても成り立つよう、角度は閾値から決める）
+    const angle = Math.acos(GROUP_SIMILARITY_THRESHOLD) * 0.9;
+    const a = [Math.cos(angle), Math.sin(angle)];
+    const b = [Math.cos(angle * 2), Math.sin(angle * 2)];
+    expect(cosineSimilarity([1, 0], b)).toBeLessThan(GROUP_SIMILARITY_THRESHOLD);
     expect(cosineSimilarity(a, b)).toBeGreaterThan(GROUP_SIMILARITY_THRESHOLD);
 
     const { assignments } = assignGroups(
