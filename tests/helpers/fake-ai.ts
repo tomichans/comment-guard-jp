@@ -9,6 +9,7 @@ import type { AiClassification, ModerationResult } from "@/server/analysis/rules
 // 分析の本体（analyzeVideoComments）は、本物か偽物かを気にせず ai.classify() / ai.moderate() を呼ぶ。
 //
 // 分類のルール（上から順に見て、最初に当てはまったもの）
+//   - 「宣伝」を含む       → spam
 //   - 「？」を含む         → question
 //   - 「してほしい」を含む → feedback（labels に request）
 //   - それ以外             → praise
@@ -17,8 +18,10 @@ import type { AiClassification, ModerationResult } from "@/server/analysis/rules
 // Embedding のルール（グルーピング）
 //   - 「音」「字幕」「曲」「機材」のどれかを含むと、その話題ごとに決まったベクトルになる（同じ話題なら類似度 1）
 //   - どれも含まなければ、本文ごとに違うベクトルになる（他のコメントとの類似度 0）
-// 論点（topic）のルール
-//   - 質問と指摘・要望には「論点：」＋本文、それ以外は null（グルーピングでは、この論点の Embedding を比べる）
+// 論点のルール（分類とは別に決める。本物の AI と同じく、分類に関係なく論点を出す）
+//   - 「？」を含む         → 質問の論点（questionTopic）＝「論点：」＋本文
+//   - 「してほしい」を含む → 指摘・要望の論点（feedbackTopic）＝「論点：」＋本文
+//   グルーピングでは、この論点の Embedding を比べる
 // =============================================================
 
 /** Embedding の話題。この語を含む本文は、同じベクトルになる（＝同じグループになる）。 */
@@ -37,13 +40,20 @@ export type FakeAi = AnalysisAi & {
 };
 
 function classifyOne(text: string): AiClassification {
+  const topics = {
+    questionTopic: text.includes("？") ? `論点：${text}` : null,
+    feedbackTopic: text.includes("してほしい") ? `論点：${text}` : null,
+  };
+  if (text.includes("宣伝")) {
+    return { primaryCategory: "spam", labels: ["spam"], score: 0.9, ...topics };
+  }
   if (text.includes("？")) {
-    return { primaryCategory: "question", labels: ["question"], score: 0.9, topic: `論点：${text}` };
+    return { primaryCategory: "question", labels: ["question"], score: 0.9, ...topics };
   }
   if (text.includes("してほしい")) {
-    return { primaryCategory: "feedback", labels: ["request"], score: 0.8, topic: `論点：${text}` };
+    return { primaryCategory: "feedback", labels: ["request"], score: 0.8, ...topics };
   }
-  return { primaryCategory: "praise", labels: ["positive"], score: 0.95, topic: null };
+  return { primaryCategory: "praise", labels: ["positive"], score: 0.95, ...topics };
 }
 
 function moderateOne(text: string): ModerationResult {

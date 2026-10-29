@@ -24,3 +24,22 @@ export type VideoRankings = {
   feedbackRequest: RankingItem[];
   question: RankingItem[];
 };
+
+/**
+ * ランキングの項目を選んだときの、コメント一覧のタブ【確定】（要件定義書4.4）。
+ * グループには要注意（harmful）のコメントも入る（要件定義書10.1）ので、おだやかなコメントと分けて見せる。
+ * dimmed：誤って選ばれないよう、半透明で表示するタブ（中央の枠の分類のタブと同じ考え方）。
+ */
+export const GROUP_COMMENT_TABS = [
+  { value: "calm", label: "おだやか", dimmed: false },
+  { value: "harmful", label: "要注意", dimmed: true },
+] as const;
+
+export type GroupCommentTab = (typeof GROUP_COMMENT_TABS)[number]["value"];
+
+/** ランキングの項目を選んだときに、選ばれているタブ【確定】 */
+export const DEFAULT_GROUP_COMMENT_TAB: GroupCommentTab = "calm";
+
+export function isGroupCommentTab(value: unknown): value is GroupCommentTab {
+  return GROUP_COMMENT_TABS.some((tab) => tab.value === value);
+}

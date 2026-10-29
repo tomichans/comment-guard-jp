@@ -36,7 +36,10 @@
      （探しにくければ、「要注意・攻撃的」タブや、SQL で `primary_category = 'harmful'` の返信を探してから、その親コメントを見る）
    - [ ] 右の枠のランキングの項目にマウスを乗せると色が変わり、選べる
    - [ ] 項目を選ぶと、中央の一覧のタブの代わりに「指摘・要望ランキング『代表論点』のコメント」と出て、そのグループのコメントだけになる
-   - [ ] 出たコメントの件数が、ランキングの「◯件」と同じ
+   - [ ] その下に「おだやか」「要注意」のタブがあり、最初は「おだやか」が選ばれている。「要注意」は半透明
+   - [ ] 「おだやか」と「要注意」の件数の合計が、ランキングの「◯件」と同じ
+   - [ ] 「要注意」を押すと、確認なしで、要注意のコメントだけが出る
+   - [ ] 別のランキングの項目を選ぶと、タブは「おだやか」に戻る
    - [ ] 選んだ項目は、右の枠で色が付いたままになる
    - [ ] 検索と並び順の切り替えが、絞り込んだまま使える
    - [ ] 「絞り込みを解除」か、同じ項目をもう一度選ぶと、タブの一覧に戻る（タブは選んでいたものに戻る）
@@ -60,20 +63,29 @@ from comment_groups g
 where g.video_id = (select id from videos order by created_at desc limit 1)
 order by g.group_type, g.comment_count desc;
 
--- グループに入ったコメント（上のグループのどれか1つの中身を見る）
-select g.representative_text, c.comment_text, c.like_count
-from comment_analysis a
+-- グループに入ったコメント（グループごとに、論点と本文と分類を並べる）
+select g.group_type, g.representative_text, t.topic, a.primary_category, c.comment_text, c.like_count
+from comment_topics t
+join comment_analysis a on a.id = t.analysis_id and a.is_latest
 join comments c on c.id = a.comment_id
-join comment_groups g on g.id = a.group_id
-where a.is_latest and g.video_id = (select id from videos order by created_at desc limit 1)
-order by g.representative_text;
+join comment_groups g on g.id = t.group_id
+where g.video_id = (select id from videos order by created_at desc limit 1)
+order by g.group_type, g.representative_text;
 
--- コメントごとの分類と論点（新しい動画の、グループの対象のもの）
-select c.comment_text, a.primary_category, a.topic
-from comment_analysis a join comments c on c.id = a.comment_id
-where a.is_latest and a.topic is not null
+-- コメントごとの分類と論点（新しい動画の親コメント。論点のないコメントも出す。1コメント最大2行）
+select c.comment_text, a.primary_category, a.labels, t.group_type, t.topic
+from comments c
+join comment_analysis a on a.comment_id = c.id and a.is_latest
+left join comment_topics t on t.analysis_id = a.id
+where c.parent_comment_id is null
   and c.video_id = (select id from videos order by created_at desc limit 1)
-order by a.topic;
+order by a.primary_category, c.comment_text;
+
+-- 要注意（harmful）になったコメント（基準を厳しくしたので、きつい言い方のものが入っているはず）
+select c.comment_text, a.labels, a.score
+from comments c join comment_analysis a on a.comment_id = c.id and a.is_latest
+where a.primary_category = 'harmful'
+  and c.video_id = (select id from videos order by created_at desc limit 1);
 
 -- AI の使用量と推定費用（米ドル）。embeddings が増えている
 select endpoint, model, count(*), sum(input_tokens) as input_tokens,
@@ -81,7 +93,10 @@ select endpoint, model, count(*), sum(input_tokens) as input_tokens,
 from api_usage_logs where service = 'openai' group by endpoint, model;
 ```
 
-- [ ] 返信（`parent_comment_id` があるコメント）は、グループに入っていない
+- [ ] 返信（`parent_comment_id` があるコメント）とスパムは、グループに入っていない
+- [ ] 要注意のコメントでも、質問や指摘があれば、論点があってグループに入っている。その論点（見出し）に、暴言やきつい言い方が入っていない
+- [ ] 質問と要望の両方を含むコメントは、論点が2行（`question` と `feedback_request`）ある
+- [ ] 「は？意味不明」のような、きつい言い方のコメントが要注意になっている。丁寧な否定的な意見は、否定的意見のまま
 - [ ] 論点が、コメントの中心の話題を短く言い表している。同じ話題なら、同じような言い方になっている
 - [ ] `embeddings` の行があり、推定費用が入っている（100件で1円未満の見込み）
 
@@ -90,8 +105,9 @@ from api_usage_logs where service = 'openai' group by endpoint, model;
 1. 動画を登録して分析が終わったら、SQL でグループと embedding を消して、「グループに入っていない」状態を作る
    ```sql
    -- 一番新しい動画のグループを消し、分析を「失敗」にする
-   update comment_analysis set embedding = null, group_id = null
-   where comment_id in (select id from comments where video_id = (select id from videos order by created_at desc limit 1));
+   update comment_topics set embedding = null, group_id = null
+   where analysis_id in (select a.id from comment_analysis a join comments c on c.id = a.comment_id
+                         where c.video_id = (select id from videos order by created_at desc limit 1));
    delete from comment_groups where video_id = (select id from videos order by created_at desc limit 1);
    update videos set analysis_status = 'failed' where id = (select id from videos order by created_at desc limit 1);
    ```

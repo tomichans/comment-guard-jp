@@ -37,7 +37,7 @@ describe("ログインユーザーのアクセス制御（RLS）", () => {
   it("RLS：ユーザーAには、videos と子テーブルの自分の行だけが見える", async () => {
     const c = userA.client;
     const ids = async (
-      table: "videos" | "comments" | "comment_analysis" | "comment_groups" | "advice_logs",
+      table: "videos" | "comments" | "comment_analysis" | "comment_topics" | "comment_groups" | "advice_logs",
     ) => {
       const { data, error } = await c.from(table).select("id");
       expect(error).toBeNull();
@@ -47,6 +47,7 @@ describe("ログインユーザーのアクセス制御（RLS）", () => {
     expect(await ids("videos")).toEqual([videoA]);
     expect(await ids("comments")).toEqual([childrenA.commentId]);
     expect(await ids("comment_analysis")).toEqual([childrenA.analysisId]);
+    expect(await ids("comment_topics")).toEqual([childrenA.topicId]);
     expect(await ids("comment_groups")).toEqual([childrenA.groupId]);
     expect(await ids("advice_logs")).toEqual([childrenA.adviceId]);
   });

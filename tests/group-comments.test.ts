@@ -11,9 +11,11 @@ import { admin, cleanup, insertVideo, newGuestId } from "./helpers/db";
 // 類似したコメントのグルーピングと、ランキング（要件定義書10章、11章）
 //
 // AI は偽物（tests/helpers/fake-ai.ts）を使う。
-//   - 「？」を含む → 質問、「してほしい」を含む → 指摘・要望、それ以外 → ポジティブ
-//   - 「音」「字幕」「曲」「機材」のどれかを含む本文は、その話題ごとに同じ Embedding になる（＝同じグループ）
-//   - 質問と指摘・要望の論点は「論点：」＋本文。グループの見出し（代表論点）は、最初の1件の論点
+//   - 「宣伝」を含む → スパム、「？」を含む → 質問、「してほしい」を含む → 指摘・要望、それ以外 → ポジティブ
+//   - 「攻撃」を含む → 要注意（Moderation API が flagged）
+//   - 「？」を含めば質問の論点、「してほしい」を含めば指摘・要望の論点（どちらも「論点：」＋本文。分類には関係なく出る）
+//   - 「音」「字幕」「曲」「機材」のどれかを含む論点は、その話題ごとに同じ Embedding になる（＝同じグループ）
+//   - グループの見出し（代表論点）は、最初の1件の論点
 // DB はローカルの Supabase を使う。
 // =============================================================
 
@@ -42,7 +44,7 @@ async function createGuestVideo(comments: TestComment[]) {
   return { owner, video };
 }
 
-/** 動画のグループを、代表論点 → 件数 の形で返す（件数0のグループも含む）。 */
+/** 動画のグループを、代表論点 → 件数 の形で返す（件数0のグループも含む）。代表論点が同じグループがある動画では使わない。 */
 async function groupCounts(videoId: string) {
   const { data, error } = await admin
     .from("comment_groups")
@@ -52,18 +54,19 @@ async function groupCounts(videoId: string) {
   return Object.fromEntries(data.map((g) => [g.representative_text, g.comment_count]));
 }
 
-/** 本文 → 最新の分析結果の group_id と、embedding があるか */
-async function groupOf(videoId: string, text: string) {
+/** 本文 → 最新の分析結果の論点ごとの、ランキングの種類、group_id、embedding があるか */
+async function topicsOfComment(videoId: string, text: string) {
   const { data, error } = await admin
     .from("comments")
-    .select("comment_analysis!inner(group_id, embedding)")
+    .select("comment_analysis!inner(comment_topics(group_type, group_id, embedding))")
     .eq("video_id", videoId)
     .eq("comment_text", text)
     .eq("comment_analysis.is_latest", true)
     .single();
   if (error) throw error;
-  const analysis = data.comment_analysis[0];
-  return { groupId: analysis.group_id, hasEmbedding: analysis.embedding !== null };
+  return data.comment_analysis[0].comment_topics
+    .map((t) => ({ groupType: t.group_type, groupId: t.group_id, hasEmbedding: t.embedding !== null }))
+    .sort((a, b) => a.groupType.localeCompare(b.groupType));
 }
 
 describe("似たコメントをグループにまとめる（要件定義書10章）", () => {
@@ -91,25 +94,43 @@ describe("似たコメントをグループにまとめる（要件定義書10�
       "論点：字幕を表示してほしい": 1,
       "論点：この曲は何ですか？": 1,
     });
-    // ポジティブのコメントはグループに入らず、embedding も作らない
-    expect(await groupOf(video.id, "最高でした")).toEqual({ groupId: null, hasEmbedding: false });
+    // 論点のないコメント（ポジティブ）はグループに入らず、embedding も作らない
+    expect(await topicsOfComment(video.id, "最高でした")).toEqual([]);
   });
 
-  it("返信と、攻撃的なコメントは、グループに入れない", async () => {
+  it("要注意のコメントもグループに入れる。返信とスパムは入れない", async () => {
     const { video } = await createGuestVideo([
       { text: "字幕を表示してほしい" },
       // 返信は対象外【確定】
       { text: "字幕があると助かるので表示してほしい", parent: 0 },
-      // 偽物の Moderation API が「攻撃」を harmful にする。labels に request があっても対象外
+      // スパムは対象外（論点があっても）
+      { text: "宣伝です。字幕を表示してほしい" },
+      // 偽物の Moderation API が「攻撃」を harmful にする。言い方がきつくても、中身の要望は数える【確定】
       { text: "攻撃的に字幕を表示してほしい" },
     ]);
 
     const ai = fakeAi();
     await analyzeVideoComments(video, { ai });
 
-    // 確認：Embedding を作ったのは、親コメントの1件の論点だけ（本文ではなく論点を比べる）
-    expect(ai.embedded.flat()).toEqual(["論点：字幕を表示してほしい"]);
-    expect(await groupCounts(video.id)).toEqual({ "論点：字幕を表示してほしい": 1 });
+    // 確認：Embedding を作ったのは、親コメントの論点だけ（本文ではなく論点を比べる）
+    expect(ai.embedded.flat()).toEqual(["論点：字幕を表示してほしい", "論点：攻撃的に字幕を表示してほしい"]);
+    expect(await groupCounts(video.id)).toEqual({ "論点：字幕を表示してほしい": 2 });
+  });
+
+  it("質問と要望の両方を含むコメントは、両方のランキングに数える", async () => {
+    const { owner, video } = await createGuestVideo([{ text: "字幕を表示してほしい。この曲は何ですか？" }]);
+
+    await analyzeVideoComments(video, { ai: fakeAi() });
+
+    // 確認：論点が2つあり、それぞれ別のランキングのグループに入っている
+    const topics = await topicsOfComment(video.id, "字幕を表示してほしい。この曲は何ですか？");
+    expect(topics.map((t) => [t.groupType, t.groupId !== null])).toEqual([
+      ["feedback_request", true],
+      ["question", true],
+    ]);
+    const rankings = await getRankingsOfOwnedVideo(owner, video.id);
+    expect(rankings?.question.map((r) => r.count)).toEqual([1]);
+    expect(rankings?.feedbackRequest.map((r) => r.count)).toEqual([1]);
   });
 
   it("本文が変わって別のグループに移ったコメントは、元のグループの件数から抜ける", async () => {
@@ -148,10 +169,12 @@ describe("似たコメントをグループにまとめる（要件定義書10�
     // 実行：Embedding を失敗させる
     await analyzeVideoComments(video, { ai: fakeAi({ failEmbedding: true }) });
 
-    // 確認：分類は保存されているが、グループはない
+    // 確認：分類と論点は保存されているが、グループはない
     const { data: status } = await admin.from("videos").select("analysis_status").eq("id", video.id).single();
     expect(status?.analysis_status).toBe("failed");
-    expect(await groupOf(video.id, "字幕を表示してほしい")).toEqual({ groupId: null, hasEmbedding: false });
+    expect(await topicsOfComment(video.id, "字幕を表示してほしい")).toEqual([
+      { groupType: "feedback_request", groupId: null, hasEmbedding: false },
+    ]);
 
     // 実行：やり直す（分類するコメントは残っていないが、グループへの振り分けは行う）
     const ai = fakeAi();
@@ -250,7 +273,7 @@ describe("ランキングを選んだときのコメント一覧（グループ�
     // 実行
     const page = await listCommentThreadsOfOwnedVideo(owner, video.id, { group: sound.id });
 
-    // 確認：ランキングの件数と同じコメントが出る（新しい順）
+    // 確認：ランキングの件数と同じコメントが出る（新しい順。どれもおだやかなコメント）
     expect(page?.threads.map((t) => t.comment_text)).toEqual([
       "BGMの音を小さくしてほしい",
       "音が小さいので直してほしい",
@@ -261,6 +284,32 @@ describe("ランキングを選んだときのコメント一覧（グループ�
       group_type: "feedback_request",
       representative_text: "論点：音が小さいので直してほしい",
     });
+  });
+
+  it("おだやか・要注意のタブで分けて返し、タブごとの件数も返す", async () => {
+    // 準備：字幕のグループに、おだやかなコメント2件と、要注意のコメント1件
+    const { owner, video } = await createGuestVideo([
+      { text: "字幕を表示してほしい" },
+      { text: "字幕を大きく表示してほしい" },
+      { text: "攻撃的に字幕を表示してほしい" },
+    ]);
+    await analyzeVideoComments(video, { ai: fakeAi() });
+    const group = (await getRankingsOfOwnedVideo(owner, video.id))!.feedbackRequest[0];
+    expect(group.count).toBe(3);
+
+    // 実行
+    const calm = await listCommentThreadsOfOwnedVideo(owner, video.id, { group: group.id });
+    const harmful = await listCommentThreadsOfOwnedVideo(owner, video.id, {
+      group: group.id,
+      groupTab: "harmful",
+    });
+
+    // 確認：既定はおだやかなコメント。要注意のタブには要注意のコメントだけ
+    expect(calm?.threads.map((t) => t.comment_text)).toEqual(["字幕を大きく表示してほしい", "字幕を表示してほしい"]);
+    expect(harmful?.threads.map((t) => t.comment_text)).toEqual(["攻撃的に字幕を表示してほしい"]);
+    expect(calm?.groupCounts).toEqual({ calm: 2, harmful: 1 });
+    // 画面に渡す分析結果には、論点（comment_topics）を含めない
+    expect(Object.keys(calm!.threads[0].analysis!).sort()).toEqual(["labels", "primary_category", "review_required"]);
   });
 
   it("他の動画のグループの id を渡しても、コメントは出ない（アクセス制御）", async () => {
@@ -276,6 +325,6 @@ describe("ランキングを選んだときのコメント一覧（グループ�
     const page = await listCommentThreadsOfOwnedVideo(b.owner, b.video.id, { group: groupOfA });
 
     // 確認：見つからない扱い（ゲストAのコメントも、ゲストBのコメントも出ない）
-    expect(page).toEqual({ threads: [], group: null, total: 0, nextOffset: null });
+    expect(page).toEqual({ threads: [], group: null, groupCounts: null, total: 0, nextOffset: null });
   });
 });

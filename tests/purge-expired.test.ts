@@ -73,6 +73,7 @@ describe("期限切れ削除ジョブ", () => {
     for (const children of [guestExpiredChildren, userExpiredChildren]) {
       expect(await exists("comments", children.commentId)).toBe(false);
       expect(await exists("comment_analysis", children.analysisId)).toBe(false);
+      expect(await exists("comment_topics", children.topicId)).toBe(false);
       expect(await exists("comment_groups", children.groupId)).toBe(false);
       expect(await exists("advice_logs", children.adviceId)).toBe(false);
     }

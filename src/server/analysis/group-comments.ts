@@ -5,28 +5,29 @@ import type { AdminClient } from "@/server/supabase/admin";
 import type { UsageContext } from "@/server/usage";
 
 import type { AnalysisAi } from "./ai";
-import { assignGroups, fromVector, groupTypeOf, toVector } from "./grouping";
+import { assignGroups, fromVector, toVector } from "./grouping";
 
 // =============================================================
-// 類似したコメントのグルーピング（要件定義書10章）
+// 似た論点のグルーピング（要件定義書10章）
 //
 // 流れ（1動画分。分類の1まわりが終わるたびに、analyze.ts から呼ばれる）
-//   1. 分類が済み、グループの対象なのに、まだグループに入っていないコメントを読む（comments_to_group）
-//   2. その論点（topic。分類の AI が分類と一緒に出したもの）の Embedding を、まとめて作る
-//   3. 既存のグループと比べて、振り分ける（assignGroups）。似たグループがなければ、新しいグループにする
-//   4. グループを保存し、コメントの分析結果に embedding と group_id を書き込む
+//   1. まだグループに入っていない論点（comment_topics）を読む（comments_to_group）
+//      論点は、分類の AI が分類と一緒に出したもの。1つのコメントに、質問の論点と、指摘・要望の論点がありうる
+//   2. 論点の Embedding を、まとめて作る
+//   3. 同じランキング（group_type）の既存のグループと比べて、振り分ける（assignGroups）。似たグループがなければ、新しいグループにする
+//   4. グループを保存し、論点に embedding と group_id を書き込む
 //      新しいグループの見出し（representative_text）は、最初の1件の論点をそのまま使う
 //   5. グループの件数（comment_count）を数え直す【確定】（+1 ではなく、そのつど数え直す）
 //
 // 本文ではなく論点で比べる理由【確定】（要件定義書10.3）：本文には動画の主題（料理名など）がどのコメントにも出てくるので、
 // 本文どうしを比べると、論点が違っても主題だけで似て見えてしまうため。
 //
-// 分類の結果は先に保存しておき、Embedding とグループは後から書き込む【確定】。
+// 分類の結果と論点は先に保存しておき、Embedding とグループは後から書き込む【確定】。
 // 分類が済んだコメントを先に画面に出すためと、Embedding で失敗しても分類の結果を失わないため。
-// Embedding が NULL のまま残ったコメントは、次の機会（「分析をやり直す」など）に、同じ条件で拾われる。
+// Embedding が NULL のまま残った論点は、次の機会（「分析をやり直す」など）に、同じ条件で拾われる。
 //
 // 同時に1つの動画を扱う処理は1つだけ（analyze.ts）なので、この関数の中は順番に進める。
-// 並べて進めると、似たコメントが同時に別々の新しいグループを作ってしまうため。
+// 並べて進めると、似た論点が同時に別々の新しいグループを作ってしまうため。
 // =============================================================
 
 export async function groupPendingComments(
@@ -43,7 +44,10 @@ export async function groupPendingComments(
     if (error) throw error;
     if (pending.length === 0) return;
 
-    const embeddings = await ai.embed(pending.map(topicOf), ctx);
+    const embeddings = await ai.embed(
+      pending.map((p) => p.topic),
+      ctx,
+    );
 
     const { data: groups, error: groupsError } = await admin
       .from("comment_groups")
@@ -53,13 +57,8 @@ export async function groupPendingComments(
       .order("id");
     if (groupsError) throw groupsError;
 
-    const candidates = pending.map((p, i) => ({
-      // comments_to_group が対象だけを返すので、null にはならない。
-      groupType: groupTypeOf(p)!,
-      embedding: embeddings[i],
-    }));
     const { assignments, newGroups } = assignGroups(
-      candidates,
+      pending.map((p, i) => ({ groupType: p.group_type, embedding: embeddings[i] })),
       groups.map((g) => ({
         id: g.id,
         groupType: g.group_type,
@@ -75,7 +74,7 @@ export async function groupPendingComments(
           id: newIds[i],
           video_id: videoId,
           group_type: g.groupType,
-          representative_text: topicOf(pending[g.seed]),
+          representative_text: pending[g.seed].topic,
           representative_embedding: toVector(embeddings[g.seed]),
           // 件数は、下の refresh_group_counts で数え直す。
           comment_count: 0,
@@ -88,12 +87,12 @@ export async function groupPendingComments(
       pending.map((p, i) => {
         const target = assignments[i];
         return admin
-          .from("comment_analysis")
+          .from("comment_topics")
           .update({
             embedding: toVector(embeddings[i]),
             group_id: "groupId" in target ? target.groupId : newIds[target.newGroup],
           })
-          .eq("id", p.analysis_id);
+          .eq("id", p.topic_id);
       }),
     );
     const updateError = results.find((r) => r.error)?.error;
@@ -102,9 +101,4 @@ export async function groupPendingComments(
     const { error: countError } = await admin.rpc("refresh_group_counts", { p_video_id: videoId });
     if (countError) throw countError;
   }
-}
-
-/** 比べる文：論点。AI が論点を出さなかったとき（ふつうは起きない）は、本文を短くしたもので代わりにする。 */
-function topicOf(comment: { topic: string | null; comment_text: string }): string {
-  return comment.topic || comment.comment_text.slice(0, 40);
 }

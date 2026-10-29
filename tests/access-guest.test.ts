@@ -75,6 +75,7 @@ describe("ゲストのアクセス制御", () => {
       "videos",
       "comments",
       "comment_analysis",
+      "comment_topics",
       "comment_groups",
       "advice_logs",
       "ng_words",

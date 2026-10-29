@@ -32,6 +32,11 @@ import {
   type CommentSort,
 } from "@/lib/comment-list";
 import type { Tables } from "@/lib/database.types";
+import {
+  DEFAULT_GROUP_COMMENT_TAB,
+  GROUP_COMMENT_TABS,
+  type GroupCommentTab,
+} from "@/lib/rankings";
 
 import { formatDate } from "./format";
 
@@ -44,7 +49,8 @@ import { formatDate } from "./format";
 // - 最初に50スレッドを表示し、一番下までスクロールすると、次の50スレッドを読み込む
 // - 親コメントと返信をスレッドの形で表示する。返信は最初は折り畳む
 //   攻撃的な返信があるスレッドは、折り畳んだままでも分かるよう、「返信を表示」の隣に印を付ける
-// - 右の枠のランキングを選ぶと（URL の ?group=）、タブの代わりに、そのグループのコメントだけを出す
+// - 右の枠のランキングを選ぶと（URL の ?group=）、分類のタブの代わりに、そのグループのコメントだけを出す
+//   グループには要注意のコメントも入るので、「おだやか」「要注意」の2つのタブに分ける
 //
 // コメント本文は、React の通常の表示（{text}）で出す。HTML として描画しないので、
 // 本文に <script> などが含まれていても、ただの文字として表示される（要件定義書16章）。
@@ -56,9 +62,11 @@ type Comment = Tables<"comments"> & {
 };
 type CommentThread = Comment & { replies: Comment[] };
 type SelectedGroup = Pick<Tables<"comment_groups">, "id" | "group_type" | "representative_text">;
+type GroupCounts = Record<GroupCommentTab, number>;
 type ThreadPage = {
   threads: CommentThread[];
   group: SelectedGroup | null;
+  groupCounts: GroupCounts | null;
   total: number;
   nextOffset: number | null;
 };
@@ -88,8 +96,17 @@ export function CommentList({
   analyzing: boolean;
   group: string | null;
 }) {
-  // 選んだグループの見出し。一覧の応答（ThreadPage.group）から受け取る。
-  const [groupInfo, setGroupInfo] = useState<{ id: string; group: SelectedGroup | null } | null>(null);
+  // 選んだグループの見出しとタブごとの件数。一覧の応答（ThreadPage.group、groupCounts）から受け取る。
+  const [groupInfo, setGroupInfo] = useState<{
+    id: string;
+    group: SelectedGroup | null;
+    counts: GroupCounts | null;
+  } | null>(null);
+  // グループのタブ（おだやか・要注意）。別のグループを選んだら、最初のタブ（おだやか）に戻す。
+  const [groupTabState, setGroupTabState] = useState<{ group: string; tab: GroupCommentTab } | null>(null);
+  const groupTab =
+    group && groupTabState?.group === group ? groupTabState.tab : DEFAULT_GROUP_COMMENT_TAB;
+  const shownGroupInfo = group && groupInfo?.id === group ? groupInfo : undefined;
 
   const [tab, setTab] = useState<CommentTab>(DEFAULT_COMMENT_TAB);
   const [sort, setSort] = useState<CommentSort>(DEFAULT_COMMENT_SORT);
@@ -111,7 +128,13 @@ export function CommentList({
   return (
     <section className="flex flex-col gap-4" aria-label="コメント一覧">
       {group ? (
-        <GroupHeader videoId={videoId} group={groupInfo?.id === group ? groupInfo.group : undefined} />
+        <GroupHeader
+          videoId={videoId}
+          group={shownGroupInfo?.group}
+          counts={shownGroupInfo?.counts ?? null}
+          tab={groupTab}
+          onTab={(next) => setGroupTabState({ group, tab: next })}
+        />
       ) : (
         <div role="tablist" aria-label="コメントの分類" className="flex flex-wrap gap-1 border-b pb-2">
           {COMMENT_TABS.map(({ value, label, dimmed }) => (
@@ -163,46 +186,81 @@ export function CommentList({
 
       {/* key：タブ・グループ・並び順・検索語・version のどれかが変わったら、一覧を作り直して最初から読み込む */}
       <Threads
-        key={`${tab}|${group}|${sort}|${query}|${version}`}
+        key={`${tab}|${group}|${groupTab}|${sort}|${query}|${version}`}
         videoId={videoId}
         tab={tab}
         group={group}
+        groupTab={groupTab}
         sort={sort}
         query={query}
         analyzing={analyzing}
-        onGroup={(g) => group && setGroupInfo({ id: group, group: g })}
+        onGroup={(page) =>
+          group && setGroupInfo({ id: group, group: page.group, counts: page.groupCounts })
+        }
       />
     </section>
   );
 }
 
 /**
- * ランキングで選んだグループの見出し（タブの代わりに出す）。「絞り込みを解除」でタブの表示に戻る。
+ * ランキングで選んだグループの見出しと、タブ（おだやか・要注意。分類のタブの代わりに出す）。
+ * 「絞り込みを解除」で分類のタブの表示に戻る。
+ * 「要注意」タブは、分類の「要注意・攻撃的」タブと同じく、意図して見に行く場所なので、確認は出さない（半透明にするだけ）。
  * @param group 読み込み中は undefined、見つからない（分析し直しで消えたなど）ときは null
  */
-function GroupHeader({ videoId, group }: { videoId: string; group: SelectedGroup | null | undefined }) {
+function GroupHeader({
+  videoId,
+  group,
+  counts,
+  tab,
+  onTab,
+}: {
+  videoId: string;
+  group: SelectedGroup | null | undefined;
+  counts: GroupCounts | null;
+  tab: GroupCommentTab;
+  onTab: (tab: GroupCommentTab) => void;
+}) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-3 text-sm">
-      <ListFilter className="size-4 shrink-0 text-muted-foreground" />
-      <div className="flex min-w-0 flex-1 flex-col">
-        {group === undefined ? (
-          <span className="text-muted-foreground">読み込み中…</span>
-        ) : group === null ? (
-          <span className="text-muted-foreground">選んだランキングの項目が見つかりません</span>
-        ) : (
-          <>
-            <span className="text-xs text-muted-foreground">{GROUP_TYPE_LABELS[group.group_type]}</span>
-            {/* 代表論点は AI が作った文なので、HTML としてではなく文字として表示する（要件定義書16章） */}
-            <span className="font-medium break-words">「{group.representative_text}」のコメント</span>
-          </>
-        )}
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-3 text-sm">
+        <ListFilter className="size-4 shrink-0 text-muted-foreground" />
+        <div className="flex min-w-0 flex-1 flex-col">
+          {group === undefined ? (
+            <span className="text-muted-foreground">読み込み中…</span>
+          ) : group === null ? (
+            <span className="text-muted-foreground">選んだランキングの項目が見つかりません</span>
+          ) : (
+            <>
+              <span className="text-xs text-muted-foreground">{GROUP_TYPE_LABELS[group.group_type]}</span>
+              {/* 代表論点は AI が作った文なので、HTML としてではなく文字として表示する（要件定義書16章） */}
+              <span className="font-medium break-words">「{group.representative_text}」のコメント</span>
+            </>
+          )}
+        </div>
+        <Button variant="outline" size="sm" asChild>
+          <Link href={`/videos/${videoId}`}>
+            <X />
+            絞り込みを解除
+          </Link>
+        </Button>
       </div>
-      <Button variant="outline" size="sm" asChild>
-        <Link href={`/videos/${videoId}`}>
-          <X />
-          絞り込みを解除
-        </Link>
-      </Button>
+      <div role="tablist" aria-label="コメントの言い方" className="flex gap-1 border-b pb-2">
+        {GROUP_COMMENT_TABS.map(({ value, label, dimmed }) => (
+          <Button
+            key={value}
+            role="tab"
+            aria-selected={tab === value}
+            variant={tab === value ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => onTab(value)}
+            className={cn(dimmed && tab !== value && "opacity-50")}
+          >
+            {label}
+            {counts && <span className="text-xs text-muted-foreground">{counts[value]}</span>}
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -211,6 +269,7 @@ function Threads({
   videoId,
   tab,
   group,
+  groupTab,
   sort,
   query,
   analyzing,
@@ -219,11 +278,12 @@ function Threads({
   videoId: string;
   tab: CommentTab;
   group: string | null;
+  groupTab: GroupCommentTab;
   sort: CommentSort;
   query: string;
   analyzing: boolean;
-  /** 一覧を読み込んだときに、選んだグループの見出しを渡す */
-  onGroup: (group: SelectedGroup | null) => void;
+  /** 一覧を読み込んだときに、選んだグループの見出しとタブごとの件数を渡す */
+  onGroup: (page: ThreadPage) => void;
 }) {
   const [threads, setThreads] = useState<CommentThread[]>([]);
   const [total, setTotal] = useState<number | null>(null);
@@ -256,10 +316,10 @@ function Threads({
         observer.disconnect();
         busy.current = true;
         setLoading(true);
-        fetchThreadPage(videoId, tab, group, sort, query, nextOffset)
+        fetchThreadPage(videoId, tab, group, groupTab, sort, query, nextOffset)
           .then((page) => {
             if (!alive.current) return;
-            onGroup(page.group);
+            onGroup(page);
             setThreads((previous) => [...previous, ...page.threads]);
             setTotal(page.total);
             setNextOffset(page.nextOffset);
@@ -279,7 +339,7 @@ function Threads({
     return () => observer.disconnect();
     // onGroup は描画のたびに作り直されるので、見張りを作り直す理由にしない（最初に受け取ったもので十分）。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoId, tab, group, sort, query, nextOffset, failed]);
+  }, [videoId, tab, group, groupTab, sort, query, nextOffset, failed]);
 
   return (
     <>
@@ -293,7 +353,9 @@ function Threads({
           {query
             ? "一致するコメントはありません"
             : group
-              ? "このランキングの項目に入っているコメントはありません"
+              ? groupTab === "harmful"
+                ? "要注意のコメントはありません"
+                : "おだやかなコメントはありません"
               : analyzing
                 ? "分析が済んだコメントから、ここに表示されます"
                 : "この分類のコメントはありません"}
@@ -432,12 +494,16 @@ async function fetchThreadPage(
   videoId: string,
   tab: CommentTab,
   group: string | null,
+  groupTab: GroupCommentTab,
   sort: CommentSort,
   query: string,
   offset: number,
 ): Promise<ThreadPage> {
   const params = new URLSearchParams({ tab, sort, offset: String(offset) });
-  if (group) params.set("group", group);
+  if (group) {
+    params.set("group", group);
+    params.set("gtab", groupTab);
+  }
   if (query) params.set("q", query);
   const response = await fetch(`/api/videos/${videoId}/comments?${params}`, { cache: "no-store" });
   if (!response.ok) throw new Error(`コメント一覧の取得に失敗（${response.status}）`);

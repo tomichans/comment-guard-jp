@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { GROUP_SIMILARITY_THRESHOLD } from "@/lib/config/analysis";
-import { assignGroups, cosineSimilarity, groupTypeOf } from "@/server/analysis/grouping";
+import { assignGroups, cosineSimilarity, topicsOf } from "@/server/analysis/grouping";
 
 // =============================================================
 // グルーピングの判定（要件定義書10章）。要件定義書0.3で必須のテスト。
@@ -15,21 +15,34 @@ function vectorWithSimilarity(similarity: number): number[] {
   return [similarity, Math.sqrt(1 - similarity ** 2)];
 }
 
-describe("どちらのグループの対象か（groupTypeOf。要件定義書10.1）", () => {
-  it.each([
-    { category: "question", labels: [], expected: "question" },
-    { category: "feedback", labels: [], expected: "feedback_request" },
-    { category: "praise", labels: ["request"], expected: "feedback_request" },
-    // question は request を含んでいても question（1コメント1グループ。上から順に判定）
-    { category: "question", labels: ["request"], expected: "question" },
-    // harmful と spam は、request を含んでいても対象外
-    { category: "harmful", labels: ["request"], expected: null },
-    { category: "spam", labels: ["request"], expected: null },
-    { category: "praise", labels: ["positive"], expected: null },
-    { category: "negative_opinion", labels: ["negative"], expected: null },
-    { category: "other", labels: [], expected: null },
-  ] as const)("$category $labels → $expected", ({ category, labels, expected }) => {
-    expect(groupTypeOf({ primary_category: category, labels: [...labels] })).toBe(expected);
+describe("どのランキングに数えるか（topicsOf。要件定義書10.1）", () => {
+  const both = { questionTopic: "使っている鍋", feedbackTopic: "BGMの音量" };
+
+  it("質問の論点と、指摘・要望の論点があれば、両方のランキングに数える（最大2つ）", () => {
+    expect(topicsOf({ isReply: false, primaryCategory: "feedback", ...both })).toEqual([
+      { groupType: "question", topic: "使っている鍋" },
+      { groupType: "feedback_request", topic: "BGMの音量" },
+    ]);
+  });
+
+  it("分類に関係なく、論点があれば数える。要注意（harmful）のコメントも数える", () => {
+    expect(
+      topicsOf({ isReply: false, primaryCategory: "harmful", questionTopic: null, feedbackTopic: "焼き色の目安" }),
+    ).toEqual([{ groupType: "feedback_request", topic: "焼き色の目安" }]);
+    expect(
+      topicsOf({ isReply: false, primaryCategory: "praise", questionTopic: "使っている鍋", feedbackTopic: null }),
+    ).toEqual([{ groupType: "question", topic: "使っている鍋" }]);
+  });
+
+  it("返信とスパムは、論点があっても数えない", () => {
+    expect(topicsOf({ isReply: true, primaryCategory: "question", ...both })).toEqual([]);
+    expect(topicsOf({ isReply: false, primaryCategory: "spam", ...both })).toEqual([]);
+  });
+
+  it("論点がなければ数えない", () => {
+    expect(
+      topicsOf({ isReply: false, primaryCategory: "question", questionTopic: null, feedbackTopic: null }),
+    ).toEqual([]);
   });
 });
 

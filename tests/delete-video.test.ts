@@ -46,6 +46,7 @@ describe("動画の削除", () => {
     expect(await exists("videos", video.id)).toBe(false);
     expect(await exists("comments", children.commentId)).toBe(false);
     expect(await exists("comment_analysis", children.analysisId)).toBe(false);
+    expect(await exists("comment_topics", children.topicId)).toBe(false);
     expect(await exists("comment_groups", children.groupId)).toBe(false);
     expect(await exists("advice_logs", children.adviceId)).toBe(false);
   });

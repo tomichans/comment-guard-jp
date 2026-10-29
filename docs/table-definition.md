@@ -20,13 +20,14 @@
 
 ---
 
-## 2. テーブル一覧（9テーブル）
+## 2. テーブル一覧（10テーブル）
 
 | テーブル | 役割 |
 | --- | --- |
 | `videos` | 動画メタを保持する。媒体種別・媒体側ID・タイトル・サムネイル等を格納する。所有者（ユーザーまたはゲスト）もここだけが持つ。 |
 | `comments` | 各動画のコメント本文と投稿メタを保持する。外部コメントIDや投稿日時を含む。 |
 | `comment_analysis` | AIとルールの判定結果を保存する。`primary_category`、`labels`、`score` 等を含む。 |
+| `comment_topics` | コメントの論点（質問の論点、指摘・要望の論点）を保持する。1コメントにつき0〜2行。グループへの所属もここで持つ。 |
 | `comment_groups` | 指摘・要望／質問の類似コメントをグルーピングし、ランキングの元データを保持する。 |
 | `ng_words` | NGワード辞書。正規化表現と危険度を持ち、ルール判定の根拠になる。 |
 | `advice_logs` | AIが生成したアドバイスの履歴を保存する。モデル情報と生成時刻を記録する。 |
@@ -45,7 +46,8 @@
 | `comments.video_id` | `videos.id` | 必須 | CASCADE |
 | `comments.parent_comment_id` | `comments.id`（自己参照） | 任意 | CASCADE |
 | `comment_analysis.comment_id` | `comments.id` | 必須 | CASCADE |
-| `comment_analysis.group_id` | `comment_groups.id` | 任意 | SET NULL |
+| `comment_topics.analysis_id` | `comment_analysis.id` | 必須 | CASCADE |
+| `comment_topics.group_id` | `comment_groups.id` | 任意 | SET NULL |
 | `comment_groups.video_id` | `videos.id` | 必須 | CASCADE |
 | `advice_logs.video_id` | `videos.id` | 必須 | CASCADE |
 | `advice_logs.user_id` | `users.id` | 任意 | CASCADE |
@@ -56,7 +58,7 @@
 - `api_usage_logs.video_id` と `api_usage_logs.guest_id` は外部キーを持たない（動画が削除されても使用量の記録を残すため）。
 - `ON DELETE` は【確定】。動画やユーザーを削除すると、それに属するデータが連鎖して削除される。
   - 期限切れ削除ジョブは、期限切れの `videos` 行を削除すれば、子テーブルも連鎖して削除される。
-  - 例外は3つ。`videos.source_id` は RESTRICT（動画が残っている媒体は削除できない）、`comment_analysis.group_id` は SET NULL（グループが消えても分析結果は残す）、`api_usage_logs.user_id` は SET NULL（アカウントが消えても使用量の記録は残す）。
+  - 例外は3つ。`videos.source_id` は RESTRICT（動画が残っている媒体は削除できない）、`comment_topics.group_id` は SET NULL（グループが消えても論点は残す）、`api_usage_logs.user_id` は SET NULL（アカウントが消えても使用量の記録は残す）。
 
 ### 関係の補足
 
@@ -206,9 +208,6 @@ CHECK (
 | `ng_words` | text[] | no |  | 実際にヒットしたNGワードの一覧 |
 | `score` | numeric(3,2) | no |  | `primary_category` の判定確信度（0.00〜1.00） |
 | `review_required` | boolean | no | | 人のレビューが必要か（条件は要件定義書9.2） |
-| `topic` | text | no |  | 分類のAIが出すコメントの論点（20字以内の名詞句。例：「イタリアンパセリの代用」）。グループの対象（要件定義書10.1）のコメントだけに入り、それ以外は `NULL`。グルーピングでは、本文ではなく論点の Embedding を比べる【確定】（要件定義書8.7、10.3） |
-| `group_id` | uuid | no | → `comment_groups.id` | 所属グループ。グループ対象外のコメント（`harmful` / `spam` を含む）は `NULL`。1コメントにつき最大1グループ |
-| `embedding` | vector(1536) | no |  | 論点（`topic`）のEmbedding変換後の値（`text-embedding-3-small`）。対象外は `NULL`。分類の結果を INSERT した後に、`group_id` と一緒に UPDATE で書き込む【確定】（要件定義書10.3） |
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 
 - `actionable_flag`、`actionable_score`、`actionable_reason` は持たない【確定】。建設的な指摘の抽出は、`primary_category` と `labels` で行う（要件定義書10.1）。
@@ -217,7 +216,7 @@ CHECK (
 
 - 再分析時は、既存行を `is_latest = false` に更新し、新しい結果を `is_latest = true` で新規INSERTする。履歴は削除しない。
 - 現在の分析結果は、常に `WHERE comment_id = X AND is_latest = true` で取得する。
-- `embedding` は、要件定義書10.1のグループ対象になるコメントのみ生成する（`harmful` / `spam` は対象外）。
+- 論点・`embedding`・`group_id` は持たない【確定】。1コメントを両方のランキングに入れるため、`comment_topics`（5.10）に分けた（要件定義書13.2）。
 
 ### 5.4 comment_groups（類似コメントのグループ）
 
@@ -228,8 +227,8 @@ CHECK (
 | `id` | uuid | yes | PK | 主キー |
 | `video_id` | uuid | yes | → `videos.id` | 所属する動画 |
 | `group_type` | enum | yes |  | どちらのランキングの対象か（4.3参照） |
-| `representative_text` | text | yes |  | 代表論点。新規グループ作成時点のコメントの論点（`comment_analysis.topic`）をそのまま格納する【確定】（例：「ナレーションの音量」） |
-| `representative_embedding` | vector(1536) | yes |  | 新規コメントとの類似度比較の基準値。新規グループ作成時点のコメントのembeddingをそのまま格納する |
+| `representative_text` | text | yes |  | 代表論点。新規グループ作成時点の論点（`comment_topics.topic`）をそのまま格納する【確定】（例：「ナレーションの音量」） |
+| `representative_embedding` | vector(1536) | yes |  | 新規コメントとの類似度比較の基準値。新規グループ作成時点の論点のembeddingをそのまま格納する |
 | `comment_count` | integer | yes |  | グループに属するコメント数（ランキングのソートキー）。最新の分析結果（`is_latest = true`）のうち、このグループに入っているものを、そのつど数え直して保存する【確定】（`refresh_group_counts`。要件定義書10.3） |
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 | `updated_at` | timestamptz | yes |  | レコード更新日時 |
@@ -238,7 +237,8 @@ CHECK (
 - `representative_embedding` は、既存グループへの合流時に更新しない【確定】。
 - `comment_count` が0のグループ（コメントが分析し直されて、別のグループに移った）は削除せず、ランキングに出さない【確定】。
 - 対象は親コメントだけ（返信は対象外）【確定】（要件定義書10.1）。
-- 1コメントが所属するグループは1つだけ。`primary_category = 'question'` なら `question`、それ以外で `feedback` または `labels` に `request` を含めば `feedback_request`（要件定義書10.1）。
+- 1コメントは、ランキング1種類につき1つのグループに入れる（最大2つ）【確定】。所属は `comment_topics.group_id` で持つ（要件定義書10.1）。
+- `comment_count` は、そのグループに入っている論点（最新の分析結果のもの）の数。1コメントが同じランキングで2回数えられることはない。
 
 ### 5.5 ng_words（NGワード辞書）
 
@@ -330,6 +330,32 @@ CHECK (
 - 期限切れ削除ジョブの対象外（YouTubeのデータを含まないため）。保持期間は【未決定】。
 - RLSは有効で、ポリシーなし（サーバー専用）。
 
+
+### 5.10 comment_topics（コメントの論点）【確定】
+
+関連：要件定義書 8.7、10章、13.2
+
+| カラム | 型 | 必須 | FK | 説明 |
+| --- | --- | --- | --- | --- |
+| `id` | uuid | yes | PK | 主キー |
+| `analysis_id` | uuid | yes | → `comment_analysis.id` | どの分析結果の論点か |
+| `group_type` | enum | yes |  | どちらのランキングの論点か（4.3参照）。質問の論点は `question`、指摘・要望の論点は `feedback_request` |
+| `topic` | text | yes |  | 分類のAIが出す論点（20字以内の名詞句。例：「イタリアンパセリの代用」）。グルーピングでは、本文ではなく論点の Embedding を比べる（要件定義書10.2） |
+| `embedding` | vector(1536) | no |  | 論点のEmbedding変換後の値（`text-embedding-3-small`）。論点を INSERT した後に、`group_id` と一緒に UPDATE で書き込む（要件定義書10.3） |
+| `group_id` | uuid | no | → `comment_groups.id` | 所属グループ。グルーピングの前は `NULL` |
+| `created_at` | timestamptz | yes |  | レコード作成日時 |
+
+**制約（確定）**
+
+```sql
+-- 1つの分析結果につき、ランキング1種類ごとに論点は1つ（1コメント最大2行）
+UNIQUE (analysis_id, group_type)
+```
+
+- 行を作るのは、論点があるコメントだけ。返信と `spam` は作らない。`harmful` は作る（要件定義書10.1）。
+- 本文が変わって分析し直すと、新しい分析結果に新しい論点がぶら下がる。古い分析結果（`is_latest = false`）の論点は、件数とランキングに数えない。
+- RLSは有効。ログインユーザーは、自分の動画のコメントの論点だけを読める（`comment_topics_select_own`）。書き込みはサーバー（service role）だけ。
+
 ---
 
 ## 6. インデックス
@@ -380,7 +406,8 @@ ON videos(created_at);
 | --- | --- |
 | `videos` | `user_id`, `source_id` |
 | `comments` | `parent_comment_id`（`video_id` は6.1のユニークインデックスの先頭列で対応） |
-| `comment_analysis` | `group_id`（`comment_id` は6.1の複合インデックスで対応） |
+| `comment_analysis` | なし（`comment_id` は6.1の複合インデックスで対応） |
+| `comment_topics` | `group_id`（`analysis_id` は制約 `UNIQUE (analysis_id, group_type)` のインデックスで対応） |
 | `comment_groups` | `video_id` |
 | `advice_logs` | `video_id`, `user_id` |
 | `api_usage_logs` | `user_id` |
@@ -389,14 +416,14 @@ ON videos(created_at);
 
 ## 7. 関数（SQL）【確定】
 
-PostgREST（supabase-js）のクエリでは書きにくい集計・検索を、SQL の関数にしている（`supabase/migrations/20261026000001_analysis_status.sql`、`20261027000001_grouping.sql`、`20261028000001_comment_topic.sql`）。
+PostgREST（supabase-js）のクエリでは書きにくい集計・検索を、SQL の関数にしている（`supabase/migrations/20261026000001_analysis_status.sql`、`20261027000001_grouping.sql`、`20261028000001_comment_topics.sql`）。
 
 | 関数 | 返す値 | 実行できるロール | 用途 |
 | --- | --- | --- | --- |
 | `comments_to_analyze(p_video_id, p_limit)` | `comments` の行（親コメントを先に） | `service_role` のみ | まだ分析されていない（`is_latest = true` の分析結果がない）コメントを探す |
 | `video_analysis_summary(p_video_id)` | json（`total`、`analyzed`、`counts`） | `authenticated`、`service_role` | 分析の進み具合と、タブごとの件数（親コメントの `primary_category` ごとの数） |
-| `comments_to_group(p_video_id, p_limit)` | 分析結果の id、本文、論点（`topic`）、`primary_category`、`labels` | `service_role` のみ | グループの対象なのに、まだ embedding のない親コメントを探す（要件定義書10.1） |
-| `refresh_group_counts(p_video_id)` | なし | `service_role` のみ | 動画のグループの `comment_count` を数え直す（要件定義書10.3） |
+| `comments_to_group(p_video_id, p_limit)` | 論点の id（`topic_id`）、`group_type`、論点（`topic`） | `service_role` のみ | 最新の分析結果の論点のうち、まだ embedding のないものを探す（要件定義書10.3） |
+| `refresh_group_counts(p_video_id)` | なし | `service_role` のみ | 動画のグループの `comment_count` を、最新の分析結果の論点の数で数え直す（要件定義書10.3） |
 | `video_rankings(p_video_id, p_limit)` | json（`feedback_request`、`question`。それぞれ `id`（グループの id。ランキングを選んだときのコメント一覧の絞り込みに使う）、`rank`、`text`、`count` の配列） | `authenticated`、`service_role` | 指摘・要望ランキングと質問ランキング（要件定義書11章の並び順） |
 
 - `video_analysis_summary` と `video_rankings` は security invoker（既定）なので、ログインユーザーが呼ぶと RLS が効き、自分の動画のコメントしか数えない。

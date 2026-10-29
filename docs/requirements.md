@@ -185,7 +185,7 @@ YouTubeのAPIから取得したデータは、YouTube API Services の規約に�
 
 - ログインユーザーを規約の上限の30日ではなく29日にするのは、削除ジョブの実行間隔や遅延によって、30日を超えて保持してしまうことを避けるため。
 - 保持期間はコードに直接書かず、上の定数で管理する。規約の確認結果などで変更する場合に、定数だけで済むようにする。
-- 対象：`videos` と、その子データ（`comments`、`comment_analysis`、`comment_groups`、`advice_logs`）すべて。分析結果やアドバイスもコメントから作られたデータなので、同じ期限で削除する。
+- 対象：`videos` と、その子データ（`comments`、`comment_analysis`、`comment_topics`、`comment_groups`、`advice_logs`）すべて。分析結果やアドバイスもコメントから作られたデータなので、同じ期限で削除する。
 - 起点：`videos.created_at`。コメントの再取得や再分析では延長しない。
 - 適用する期間：`guest_id IS NOT NULL` の動画にはゲストの期間、`user_id IS NOT NULL` の動画にはログインユーザーの期間を適用する。
 - ゲストからログインへの引継ぎ時：`created_at` は変えず、引継ぎ後はログインユーザーの期間が適用される。
@@ -289,7 +289,9 @@ ChatGPT、Gemini のように、基本的に1画面で完結する3ペインレ�
   - 表示する場所：中央ペインのコメント一覧。タブの代わりに「（ランキング名）『代表論点』のコメント」という見出しと「絞り込みを解除」ボタンを出す。検索と並び順の切り替えは、そのまま使える。選んだ項目をもう一度選んでも、解除できる。
   - 理由：右ペインは幅が狭く、コメントや返信を読むのに向かないため。中央ペインの一覧をそのまま使えば、スレッドの表示、返信、「要注意」の印、並び順、続きの読み込みが同じ形で使える。
   - URL【確定】：`/videos/:id?group=グループのid`。理由：再読み込みやブラウザの「戻る」で、同じ表示に戻れるようにするため（4.1と同じ考え方）。
-  - API：`GET /api/videos/:id/comments` の `group`。グループには分類の違うコメントが入る（例：`request` のラベルが付いたポジティブのコメント）ので、`group` を指定したときはタブ（`tab`）を使わない。他の動画のグループの id を指定しても、コメントは返さない。
+  - API：`GET /api/videos/:id/comments` の `group`。グループには分類の違うコメントが入る（例：要注意のコメント、`request` のラベルが付いたポジティブのコメント）ので、`group` を指定したときはタブ（`tab`）を使わない。他の動画のグループの id を指定しても、コメントは返さない。
+  - 選んだグループのコメントは、「おだやか」（`harmful` 以外）と「要注意」（`harmful`）の2つのタブに分ける【確定】（API の `gtab`）。開いたときは「おだやか」。「要注意」は半透明で表示し、警告は出さない（「要注意・攻撃的」タブと同じく、意図して見に行く場所のため）。各タブに件数を出す。
+    - 理由：グループには要注意のコメントも入る（10.1）ので、指摘や質問の中身を見たいときに、きつい言い方のコメントが目に入らないようにするため。「要注意」は、分類のタブや返信の印と同じ言葉にした。
 
 - **指摘・要望ランキング**：同じ意味を持つ指摘・要望をまとめて集計し、多かった順に1〜3位まで表示する。
   - 例：1位「BGMが大きい」20件、2位「映像が暗い」10件、3位「もっと被写体に寄ってほしい」5件
@@ -420,7 +422,7 @@ advice_logsへ保存
 | `feedback` | 改善につながる指摘・要望 |
 | `praise` | 称賛・ポジティブ |
 | `negative_opinion` | 否定的意見（攻撃性なし） |
-| `harmful` | 攻撃的・誹謗中傷・NG |
+| `harmful` | 攻撃的・誹謗中傷・NG。少しでも悪意やきつい言い方を含むもの（9.1） |
 | `spam` | スパム・宣伝 |
 | `other` | 分類不能・雑談 |
 
@@ -472,7 +474,9 @@ advice_logsへ保存
 - 分類の指示文（プロンプト）には、各分類の定義に加えて、間違えやすい例を書く【確定】（`src/server/analysis/ai.ts`）。
   - 例：豆知識の披露（「〇〇って本場にはないって聞いたことある」）は `other`、答えを求めない独り言は `praise` か `other`、疑いを込めた反語（「これ本当に美味しいのか？」）は `negative_opinion` で、いずれも `question` ではない。
   - 理由：定義が「質問」の1語だけだったときに、これらが `question` に分類され、質問ランキングに混ざったため（2026年10月28日の確認）。
-- 分類と一緒に、コメントの論点（`topic`。20字以内の名詞句。例：「イタリアンパセリの代用」）も出させる【確定】。グループの対象（10.1）のコメントだけに書かせ、グルーピング（10.3）で使う。
+- 分類と一緒に、コメントの論点（20字以内の名詞句。例：「イタリアンパセリの代用」）も出させる【確定】。質問の論点（`question_topic`）と、指摘・要望の論点（`feedback_topic`）を別々に出させ、`comment_topics` に保存して、グルーピング（10.3）で使う。
+  - `primary_category` に関係なく、質問や指摘・要望の部分があれば書かせる（要注意のコメントでも書かせる。10.1）。
+  - 論点は、コメントの言い方や感情を入れない中立な言葉にさせる（例：「は？意味不明。きつね色はだめ」→「焼き色の目安」）。理由：要注意のコメントの論点も、ランキングの見出し（代表論点）になるため。
 
 ---
 
@@ -484,6 +488,12 @@ advice_logsへ保存
 
 - 例：「今回の動画は前回より分かりにくかった」は否定的な意見だが、改善に有用な可能性がある。
 - 例：「お前は消えろ」のようなコメントは攻撃的コメントとして扱う。
+- `harmful` の基準は厳しめにする【確定】：少しでも悪意やきつい言い方があれば `harmful` にする。迷ったら `harmful` にする（見逃すより、誤って `harmful` にする方を許す）。
+  - 含むもの：誹謗中傷・脅迫・嫌がらせ・侮辱に加えて、突き放す・苛立ちをぶつける言い方（「は？意味不明」）、見下す・馬鹿にする言い方（「センスない」「素人以下」）、嫌味・皮肉、頭ごなしの否定。役に立つ指摘や質問を含んでいても、言い方にこれらがあれば `harmful`。
+  - 丁寧な言い方の否定的な意見は `negative_opinion`、丁寧な言い方の指摘は `feedback` のまま。
+  - 理由：このアプリの利用者は、コメントで心を痛めやすい発信者を想定している。発信者が今後の活動への意欲をなくさないよう、きつい言い方のコメントは、意図して見に行くとき以外は目に入らないようにする（2026年10月29日、「4:26〜 は？意味不明。きつね色にしてはだめ。黄金色でストップ。」が `feedback` に分類されたことから決定）。
+  - 言い方がきつくても、中身の質問や指摘はランキングに数える（10.1）。役に立つ指摘を見落とさないようにするため。
+  - 判定は分類のAIの指示文（`src/server/analysis/ai.ts`）で行う。`harmful` にしたときは、理由に合うラベル（`harassment`、`insult`、`threat`）を付けさせる。
 
 ### 9.2 NG判定【確定】
 
@@ -543,11 +553,15 @@ advice_logsへ保存
 
 ### 10.1 抽出対象【確定】
 
-- `harmful` と `spam` のコメントは、グループとランキングの対象にしない（`labels` に `request` を含んでいても除外する）。
-- 1コメントが所属できるグループは最大1つ。次の順に判定する。
-  1. `primary_category = 'question'` → `group_type = 'question'`
-  2. 上記以外で、`primary_category = 'feedback'` または `labels` に `'request'` を含む → `group_type = 'feedback_request'`
-  3. 上記のどちらにも該当しない → グループなし（`group_id = NULL`。embeddingも生成しない）
+- 分類のAIが出した論点（8.7）があるコメントを、ランキングに数える。`primary_category` には関係なく、質問や指摘・要望の部分を含むコメントはすべて数える【確定】。
+  - 質問の論点（`question_topic`）があれば、質問ランキング（`group_type = 'question'`）
+  - 指摘・要望の論点（`feedback_topic`）があれば、指摘・要望ランキング（`group_type = 'feedback_request'`）
+  - 1コメントは、両方のランキングに入れる（最大2つのグループ。1ランキングにつき1つ）【確定】。例：「BGMうるさい。あと鍋どこの？」→ 質問「使っている鍋」と、指摘「BGMの音量」
+  - 論点がなければ、どのグループにも入らない（`comment_topics` に行を作らない。embedding も生成しない）。
+  - 理由：ランキングは「こういう質問・指摘・要望が多い」という目安なので、主分類が別のもの（ポジティブ、要注意など）や、質問と要望を両方含むコメントも、取りこぼさずに数えるため（2026年10月29日に決定）。
+- 要注意（`harmful`）のコメントも対象にする【確定】。理由：9.1で `harmful` の基準を厳しくしたので、きつい言い方の役に立つ指摘を、ランキングから落とさないため。見出しは中立な論点（8.7）なので、暴言はランキングに出ない。
+- `spam` のコメントは対象にしない（論点があっても除外する）。NGワード（severity=5）で AI を通さずに `harmful` にしたコメントは、論点がないので数えない。
+- 判定は `src/server/analysis/grouping.ts` の `topicsOf()`。
 - 対象は親コメントだけ。返信はグループとランキングの対象にしない【確定】（返信の分類は行う。8.7）。
   - 理由：保存される返信は1スレッドにつき YouTube が同梱する数件だけ（7.3）で、視聴者どうしの会話も多いため。親コメントだけにすると、ランキングが発信者に向けた内容になり、Embedding の費用も少なくなる。
 
@@ -556,7 +570,7 @@ advice_logsへ保存
 OpenAI Embedding と、コサイン類似度による判定。
 
 - Embeddingモデル：OpenAI `text-embedding-3-small`
-- 比べる対象：コメント本文ではなく、分類のAIが出した論点（`comment_analysis.topic`。8.7）【確定】。
+- 比べる対象：コメント本文ではなく、分類のAIが出した論点（`comment_topics.topic`。8.7）【確定】。
   - 理由：本文どうしを比べると、動画の主題（料理名など）がどのコメントにも出てくるので、論点が違っても似て見えてしまうため。実際に、パセリの代用・鍋・値段・具材など別々の質問7件が、1つのグループになった（2026年10月28日の確認）。
 - 類似度の閾値：0.6【確定】（定数 `GROUP_SIMILARITY_THRESHOLD`。`src/lib/config/analysis.ts`）
   - 経緯：本文どうしを比べていたときは、0.82 では言い換えも合流せず（「塩加減の説明を分かりやすくしてほしい」と「塩加減を具体的に示してほしい」で 0.556）、0.5 では主題が共通なだけで別の論点が合流した。
@@ -565,21 +579,22 @@ OpenAI Embedding と、コサイン類似度による判定。
 
 ### 10.3 処理フロー
 
-1. LLM分析（`primary_category` 確定）の後、対象条件を判定する。
-   - 条件を満たす場合のみ、論点（`topic`。8.7）から `text-embedding-3-small` で embedding を生成し、`comment_analysis.embedding` に1回だけ書き込む。
-   - 書き込み方【確定】：分類の結果を先に `comment_analysis` に INSERT し、embedding と `group_id` は、グルーピングの後に UPDATE で書き込む（`src/server/analysis/group-comments.ts`）。
-     - 理由：分類が済んだコメントを先に画面に出すため（4.3）と、Embedding で失敗しても分類の結果を失わないため。embedding が NULL のまま残ったグループ対象のコメントは、「分析をやり直す」（15.2）で、同じ条件で拾い直される。
+1. LLM分析（`primary_category` 確定）の後、対象条件（10.1）を判定し、論点を `comment_topics` に保存する（1コメント0〜2行）。
+   - 論点ごとに、`text-embedding-3-small` で embedding を生成し、`comment_topics.embedding` に1回だけ書き込む。
+   - 書き込み方【確定】：分類の結果を先に `comment_analysis` に、論点を `comment_topics` に INSERT し、embedding と `group_id` は、グルーピングの後に `comment_topics` へ UPDATE で書き込む（`src/server/analysis/group-comments.ts`）。
+     - 理由：分類が済んだコメントを先に画面に出すため（4.3）と、Embedding で失敗しても分類の結果を失わないため。embedding が NULL のまま残った論点は、「分析をやり直す」（15.2）で、同じ条件で拾い直される。
+     - 論点の保存に失敗したときは、そのまとまりの分類の結果も消し、「まだ分析されていない」に戻す（論点が抜けたまま「分析済み」になると、ランキングに二度と数えられないため）。
    - LLM分析とEmbedding生成の並行実行は不採用（可読性を優先）。分類の1まわり（最大50件×4まとまり）が終わるたびに、その分をまとめてグルーピングする。
-2. 同一 `video_id`・同一 `group_type` の既存グループと、コサイン類似度を比較する。
+2. 論点ごとに、同一 `video_id`・同一 `group_type` の既存グループと、コサイン類似度を比較する。
 3. 類似度が閾値（10.2）以上なら、既存グループに合流する。いちばん似ているグループに入る。同じ回に新しく作ったグループにも合流できる。
 4. 類似度が閾値未満なら、新規グループを作成する。
-   - `representative_text`（代表論点）には、そのコメントの論点（`topic`）をそのまま使う【確定】。
+   - `representative_text`（代表論点）には、その論点（`comment_topics.topic`）をそのまま使う【確定】。
      - 理由：分類のAIが論点を作っているので、見出しを作るためにAIを呼び直す必要がないため（当初は、新しいグループごとに軽量LLMで作っていた）。
-   - `representative_embedding` には、そのコメントのembeddingをそのまま格納する。合流時（手順3）には更新しない【確定】。
+   - `representative_embedding` には、その論点のembeddingをそのまま格納する。合流時（手順3）には更新しない【確定】。
    - 例：「音が小さい」「声が聞き取りづらい」「BGMに対してナレーションが小さい」 → どれも論点「ナレーションの音量」として合流する
-5. `comment_analysis.group_id` を確定する。
+5. `comment_topics.group_id` を確定する。
 6. グループの件数（`comment_count`）を数え直す【確定】。
-   - `+1` で増やすのではなく、そのつど「最新の分析結果（`is_latest = true`）のうち、そのグループに入っているもの」を数えて保存する（SQL の関数 `refresh_group_counts`）。
+   - `+1` で増やすのではなく、そのつど「最新の分析結果（`is_latest = true`）の論点のうち、そのグループに入っているもの」を数えて保存する（SQL の関数 `refresh_group_counts`）。
    - 理由：本文が変わって分析し直したコメント（7.4）は、古い結果が `is_latest = false` になるので、元のグループから自然に抜けるため。4まとまりを同時に分析しても、数がずれない。
    - 件数が0になったグループは削除せず、ランキングに出さない。
 
@@ -598,8 +613,11 @@ comment_groups
   comment_count
   created_at / updated_at
 
-comment_analysis
-  topic                     分類のAIが出す論点（グループの対象のコメントだけ）
+comment_topics（コメントの論点。1コメント0〜2行。2026年10月29日に追加）
+  analysis_id               comment_analysis.id への外部キー
+  group_type                enum('feedback_request', 'question')
+  topic                     分類のAIが出す論点
+  embedding                 論点の Embedding
   group_id                  comment_groups.id への外部キー（nullable）
 ```
 
@@ -680,13 +698,14 @@ comment_analysis
 
 ## 13. データモデル
 
-### 13.1 テーブル一覧（MVPの正式構成は9テーブル）
+### 13.1 テーブル一覧（MVPの正式構成は10テーブル）
 
 | テーブル | 役割 |
 | --- | --- |
 | `videos` | 動画メタを保持する |
 | `comments` | 各動画のコメント本文と投稿メタを保持する |
 | `comment_analysis` | AI・ルールによる分析結果を保持する |
+| `comment_topics` | コメントの論点（質問・指摘・要望）を保持する。1コメントにつき0〜2行（スライス4で追加【確定】） |
 | `comment_groups` | 指摘・要望／質問の類似コメントをグルーピングし、ランキングの元データを保持する |
 | `ng_words` | NGワード辞書を保持する |
 | `advice_logs` | AI生成したアドバイスの履歴を保持する |
@@ -723,9 +742,15 @@ comment_analysis
 - 再分析履歴は `is_latest` フラグ方式。
   - 再分析時は既存行を `is_latest = false` に更新し、新しい結果を `is_latest = true` で新規INSERTする（履歴は削除しない）。
   - 現在の分析結果は常に `WHERE comment_id = X AND is_latest = true` で取得する。
-- `embedding` は、10.1のグループ対象になるコメント（`harmful` / `spam` を除き、`primary_category` が `question` または `feedback`、もしくは `labels` に `request` を含むもの）の場合のみ生成する。対象外は null のまま保存する。
 - NGワードのヒット結果は、`comment_analysis.ng_words`（`text[]`）にヒットした単語を配列でそのまま保存する簡易方式（中間テーブルは作らない）。
-- `topic`（論点）は、グループの対象（10.1）のコメントだけに入る。グルーピングで、本文の代わりに比べるために保存する（8.7、10.3）。
+- 論点、`embedding`、`group_id` は持たない。`comment_topics` に置く（下記）。
+
+#### comment_topics【確定】
+
+- コメントの論点（質問の論点と、指摘・要望の論点）を、1行に1つ保存する。1つの分析結果につき0〜2行（`(analysis_id, group_type)` にユニーク制約）。
+- 理由：1コメントを両方のランキングに入れる（10.1）ため。当初は `comment_analysis` に `topic`、`embedding`、`group_id` を1つずつ持っていたが、1コメント1グループしか表せなかった。
+- `comment_analysis` にぶら下げる（`analysis_id`）。本文が変わって分析し直すと、古い分析結果（`is_latest = false`）の論点は数えられなくなる（10.3の数え直し）。
+- `embedding` と `group_id` は、グルーピングの後に書き込む（10.3）。
 
 #### advice_logs
 
@@ -772,7 +797,8 @@ erDiagram
     videos ||--o{ advice_logs : "video_id"
     comments ||--o{ comments : "parent_comment_id"
     comments ||--o{ comment_analysis : "comment_id"
-    comment_groups |o--o{ comment_analysis : "group_id"
+    comment_analysis ||--o{ comment_topics : "analysis_id"
+    comment_groups |o--o{ comment_topics : "group_id"
     users o|--o{ api_usage_logs : "user_id"
 ```
 
@@ -791,14 +817,15 @@ erDiagram
 | `comments.video_id` → `videos.id` | CASCADE |
 | `comments.parent_comment_id` → `comments.id` | CASCADE |
 | `comment_analysis.comment_id` → `comments.id` | CASCADE |
-| `comment_analysis.group_id` → `comment_groups.id` | SET NULL |
+| `comment_topics.analysis_id` → `comment_analysis.id` | CASCADE |
+| `comment_topics.group_id` → `comment_groups.id` | SET NULL |
 | `comment_groups.video_id` → `videos.id` | CASCADE |
 | `advice_logs.video_id` → `videos.id` | CASCADE |
 | `advice_logs.user_id` → `users.id` | CASCADE |
 | `users.id` → `auth.users.id` | CASCADE |
 | `api_usage_logs.user_id` → `users.id` | SET NULL |
 
-- 期限切れ削除ジョブ（3.3）は、期限切れの `videos` 行を削除すれば、`comments`、`comment_analysis`、`comment_groups`、`advice_logs` も連鎖して削除される。
+- 期限切れ削除ジョブ（3.3）は、期限切れの `videos` 行を削除すれば、`comments`、`comment_analysis`、`comment_topics`、`comment_groups`、`advice_logs` も連鎖して削除される。
 
 ---
 
@@ -817,7 +844,7 @@ erDiagram
 | コメントの論点（グルーピング用。スライス4） | 分類と同じ呼び出しで出す（追加の呼び出しなし） | 【確定】 |
 | AIアドバイス（スライス5） | 高性能なモデル。候補は `gpt-6.1-sol`（物足りなければ `gpt-6-astra`） | 【未決定】スライス5で決める |
 
-- **コメントの論点**（8.7、10.3）【確定】：分類のAIが、分類と同じ呼び出しで出す。グループの見出し（代表論点）にも、そのまま使う。
+- **コメントの論点**（8.7、10.3）【確定】：分類のAIが、分類と同じ呼び出しで、質問の論点と指摘・要望の論点を出す。グループの見出し（代表論点）にも、そのまま使う。
   - 理由：分類のAIは全コメントを読んでいるので、出力が少し増えるだけで、AIを呼ぶ回数は増えないため。当初は、新しいグループごとに見出しを作る呼び出し（`gpt-6-luna`）をしていたが、不要になった。
 - **コメント分類**：複数コメントをまとめて安価なモデルへ送信する。1バッチ50コメント（8.7）。
   - モデルは【確定】：OpenAI の小型モデル（初期値 `gpt-6-luna`。`src/lib/config/analysis.ts` の `DEFAULT_CLASSIFY_MODEL`、環境変数 `OPENAI_CLASSIFY_MODEL` で上書きできる）。

@@ -16,7 +16,12 @@ import {
 import { RANKING_SIZE } from "@/lib/config/analysis";
 import { expiryCutoff, isExpired } from "@/lib/config/retention";
 import type { Database, Tables } from "@/lib/database.types";
-import type { RankingItem, VideoRankings } from "@/lib/rankings";
+import {
+  DEFAULT_GROUP_COMMENT_TAB,
+  type GroupCommentTab,
+  type RankingItem,
+  type VideoRankings,
+} from "@/lib/rankings";
 import { isUuid } from "@/lib/uuid";
 import { effectiveAnalysisStatus } from "@/server/analysis/status";
 import { createAdminClient } from "@/server/supabase/admin";
@@ -116,6 +121,8 @@ export type CommentThreadPage = {
    * 絞り込んでいないときと、グループが見つからない（この動画のものではない）ときは null。
    */
   group: SelectedGroup | null;
+  /** group で絞り込んだときの、タブ（おだやか・要注意）ごとのスレッドの数。絞り込んでいないときは null。 */
+  groupCounts: Record<GroupCommentTab, number> | null;
   /** 条件（タブ・検索語）に合うスレッドの総数 */
   total: number;
   /** 続きを読み込むときの offset。最後まで読み込んだら null。 */
@@ -129,11 +136,12 @@ export type CommentListOptions = {
   /** 親コメントの本文に含まれる語（部分一致）。空なら絞り込まない。 */
   q?: string;
   /**
-   * ランキングのグループ（comment_groups.id）。指定すると、そのグループに入っているコメントだけにする。
-   * グループには分類の違うコメント（質問、指摘・要望、要望のラベルが付いたポジティブなど）が入るので、
-   * 指定したときは tab を使わない。
+   * ランキングのグループ（comment_groups.id）。指定すると、そのグループに論点が入っているコメントだけにする。
+   * グループには分類の違うコメント（質問、指摘・要望、要注意など）が入るので、指定したときは tab を使わず、groupTab を使う。
    */
   group?: string;
+  /** group を指定したときのタブ：おだやか（calm。harmful 以外）か、要注意（harmful） */
+  groupTab?: GroupCommentTab;
   offset?: number;
 };
 
@@ -150,6 +158,10 @@ const SORT_COLUMNS = {
 // 「!inner」を付けると、分析結果のあるコメントだけになる（SQL の INNER JOIN）。付けなければ LEFT JOIN。
 const WITH_ANALYSIS = "*, comment_analysis(primary_category, labels, review_required)";
 const ONLY_ANALYZED = "*, comment_analysis!inner(primary_category, labels, review_required)";
+// ランキングのグループで絞り込むとき：分析結果の下の論点（comment_topics）まで INNER JOIN でつなぎ、
+// 論点の group_id で絞り込む（「comment_analysis.comment_topics.group_id」のように、つないだ先の列で絞れる）。
+const IN_GROUP =
+  "*, comment_analysis!inner(primary_category, labels, review_required, comment_topics!inner(group_id))";
 
 /**
  * 自分の動画のコメント一覧を、スレッド（親コメント＋返信）の形で、COMMENT_PAGE_SIZE 件ずつ返す。
@@ -167,7 +179,14 @@ const ONLY_ANALYZED = "*, comment_analysis!inner(primary_category, labels, revie
 export async function listCommentThreadsOfOwnedVideo(
   owner: Owner,
   videoId: string,
-  { sort = DEFAULT_COMMENT_SORT, tab = "all", q = "", group, offset = 0 }: CommentListOptions = {},
+  {
+    sort = DEFAULT_COMMENT_SORT,
+    tab = "all",
+    q = "",
+    group,
+    groupTab = DEFAULT_GROUP_COMMENT_TAB,
+    offset = 0,
+  }: CommentListOptions = {},
   now: Date = new Date(),
 ): Promise<CommentThreadPage | null> {
   const video = await findOwnedVideo(owner, videoId, now);
@@ -178,7 +197,9 @@ export async function listCommentThreadsOfOwnedVideo(
   let selectedGroup: SelectedGroup | null = null;
   if (group !== undefined) {
     selectedGroup = isUuid(group) ? await findGroup(client, video.id, group) : null;
-    if (!selectedGroup) return { threads: [], group: null, total: 0, nextOffset: null };
+    if (!selectedGroup) {
+      return { threads: [], group: null, groupCounts: null, total: 0, nextOffset: null };
+    }
   }
 
   const analysisFailed = (await effectiveAnalysisStatus(video, now)) === "failed";
@@ -188,12 +209,21 @@ export async function listCommentThreadsOfOwnedVideo(
   // [Supabase固有] count: "exact" で、条件に合う行の総数も一緒に受け取る（「全123件」の表示用）。
   let query = client
     .from("comments")
-    .select(includeUnanalyzed ? WITH_ANALYSIS : ONLY_ANALYZED, { count: "exact" })
+    .select(selectedGroup ? IN_GROUP : includeUnanalyzed ? WITH_ANALYSIS : ONLY_ANALYZED, {
+      count: "exact",
+    })
     .eq("video_id", video.id)
     .is("parent_comment_id", null)
     .eq("comment_analysis.is_latest", true);
-  if (selectedGroup) query = query.eq("comment_analysis.group_id", selectedGroup.id);
-  else if (tab !== "all") query = query.eq("comment_analysis.primary_category", tab);
+  if (selectedGroup) {
+    query = query.eq("comment_analysis.comment_topics.group_id", selectedGroup.id);
+    query =
+      groupTab === "harmful"
+        ? query.eq("comment_analysis.primary_category", "harmful")
+        : query.neq("comment_analysis.primary_category", "harmful");
+  } else if (tab !== "all") {
+    query = query.eq("comment_analysis.primary_category", tab);
+  }
   // 検索するのは親コメントの本文だけ（返信は含めない。要件定義書4.3）。
   if (q) query = query.ilike("comment_text", `%${escapeLike(q)}%`);
   for (const column of SORT_COLUMNS[sort]) {
@@ -232,9 +262,34 @@ export async function listCommentThreadsOfOwnedVideo(
   return {
     threads: parents.map((p) => ({ ...withAnalysis(p), replies: repliesByParent.get(p.id) ?? [] })),
     group: selectedGroup,
+    groupCounts: selectedGroup ? await countGroupThreads(client, video.id, selectedGroup.id) : null,
     total,
     nextOffset: parents.length > 0 && next < total ? next : null,
   };
+}
+
+/** グループに論点が入っている親コメントの数を、タブ（おだやか・要注意）ごとに数える（検索語には関係なく）。 */
+async function countGroupThreads(
+  client: SupabaseClient<Database>,
+  videoId: string,
+  groupId: string,
+): Promise<Record<GroupCommentTab, number>> {
+  const count = async (harmful: boolean) => {
+    const query = client
+      .from("comments")
+      .select(IN_GROUP, { count: "exact", head: true })
+      .eq("video_id", videoId)
+      .is("parent_comment_id", null)
+      .eq("comment_analysis.is_latest", true)
+      .eq("comment_analysis.comment_topics.group_id", groupId);
+    const { count, error } = harmful
+      ? await query.eq("comment_analysis.primary_category", "harmful")
+      : await query.neq("comment_analysis.primary_category", "harmful");
+    if (error) throw error;
+    return count ?? 0;
+  };
+  const [calm, harmful] = await Promise.all([count(false), count(true)]);
+  return { calm, harmful };
 }
 
 /** 動画のグループを1件読む。この動画のグループでなければ null。 */
@@ -253,12 +308,25 @@ async function findGroup(
   return data;
 }
 
-/** 埋め込みで受け取った comment_analysis（配列。最新の1件だけ）を、analysis（1件か null）に直す。 */
+/**
+ * 埋め込みで受け取った comment_analysis（配列。最新の1件だけ）を、analysis（1件か null）に直す。
+ * 画面で使う列だけを残す（グループで絞り込んだときに付いてくる comment_topics は渡さない）。
+ */
 function withAnalysis({
   comment_analysis,
   ...comment
 }: Comment & { comment_analysis: CommentAnalysis[] }): CommentWithAnalysis {
-  return { ...comment, analysis: comment_analysis[0] ?? null };
+  const analysis = comment_analysis[0];
+  return {
+    ...comment,
+    analysis: analysis
+      ? {
+          primary_category: analysis.primary_category,
+          labels: analysis.labels,
+          review_required: analysis.review_required,
+        }
+      : null,
+  };
 }
 
 /** 自分の動画の、分析の進み具合とタブごとの件数。動画が自分のものでなければ null。 */

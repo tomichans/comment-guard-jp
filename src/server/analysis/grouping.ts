@@ -10,23 +10,27 @@ import type { Enums } from "@/lib/database.types";
 
 export type GroupType = Enums<"group_type">;
 
+export type CommentTopic = { groupType: GroupType; topic: string };
+
 /**
- * コメントがどちらのグループの対象か【確定】（要件定義書10.1）。対象外なら null（embedding も作らない）。
- *   1. harmful と spam は対象外（labels に request があっても）
- *   2. primary_category が question → question
- *   3. primary_category が feedback か、labels に request を含む → feedback_request
- * 返信は対象外【確定】（親コメントだけをグルーピングする）。その判定は、対象を探す SQL（comments_to_group）で行う。
- * この条件を変えるときは、comments_to_group の SQL も同じように直す。
+ * コメントを、どちらのランキングに数えるか【確定】（要件定義書10.1）。
+ * 分類の AI が出した論点（質問の論点と、指摘・要望の論点）ごとに、1つずつ返す（0〜2個）。
+ *   - 返信は対象外【確定】（親コメントだけをグルーピングする）
+ *   - スパムは対象外
+ *   - 要注意（harmful）のコメントも対象【確定】。言い方がきつくても、中身の質問や指摘はランキングの目安に入れる
+ *   - 論点がない（AI が出さなかった、または NGワードで AI を通さずに harmful にした）ときは、数えない
  */
-export function groupTypeOf(analysis: {
-  primary_category: Enums<"primary_category">;
-  labels: string[];
-}): GroupType | null {
-  const { primary_category: category, labels } = analysis;
-  if (category === "harmful" || category === "spam") return null;
-  if (category === "question") return "question";
-  if (category === "feedback" || labels.includes("request")) return "feedback_request";
-  return null;
+export function topicsOf(comment: {
+  isReply: boolean;
+  primaryCategory: Enums<"primary_category">;
+  questionTopic: string | null;
+  feedbackTopic: string | null;
+}): CommentTopic[] {
+  if (comment.isReply || comment.primaryCategory === "spam") return [];
+  const topics: CommentTopic[] = [];
+  if (comment.questionTopic) topics.push({ groupType: "question", topic: comment.questionTopic });
+  if (comment.feedbackTopic) topics.push({ groupType: "feedback_request", topic: comment.feedbackTopic });
+  return topics;
 }
 
 /** コサイン類似度（-1〜1。1に近いほど、意味が似ている）。 */
@@ -50,7 +54,7 @@ export type GroupCandidate = { groupType: GroupType; embedding: number[] };
 export type GroupAssignment = { groupId: string } | { newGroup: number };
 
 /**
- * コメント（candidates）を、順番に1件ずつグループに振り分ける（要件定義書10.3）。
+ * 論点（candidates）を、順番に1件ずつグループに振り分ける（要件定義書10.3）。
  *   - 同じ group_type のグループのうち、いちばん似ているものの類似度が threshold 以上なら、そこに合流する
  *   - なければ、そのコメントを最初の1件として、新しいグループを作る
  * 新しく作ったグループも、後ろのコメントの合流先になる（同じ回の中で、似たコメントが別々のグループにならないように）。
