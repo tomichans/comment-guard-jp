@@ -397,7 +397,7 @@ PostgREST（supabase-js）のクエリでは書きにくい集計・検索を、
 | `video_analysis_summary(p_video_id)` | json（`total`、`analyzed`、`counts`） | `authenticated`、`service_role` | 分析の進み具合と、タブごとの件数（親コメントの `primary_category` ごとの数） |
 | `comments_to_group(p_video_id, p_limit)` | 分析結果の id、本文、論点（`topic`）、`primary_category`、`labels` | `service_role` のみ | グループの対象なのに、まだ embedding のない親コメントを探す（要件定義書10.1） |
 | `refresh_group_counts(p_video_id)` | なし | `service_role` のみ | 動画のグループの `comment_count` を数え直す（要件定義書10.3） |
-| `video_rankings(p_video_id, p_limit)` | json（`feedback_request`、`question`。それぞれ `rank`、`text`、`count` の配列） | `authenticated`、`service_role` | 指摘・要望ランキングと質問ランキング（要件定義書11章の並び順） |
+| `video_rankings(p_video_id, p_limit)` | json（`feedback_request`、`question`。それぞれ `id`（グループの id。ランキングを選んだときのコメント一覧の絞り込みに使う）、`rank`、`text`、`count` の配列） | `authenticated`、`service_role` | 指摘・要望ランキングと質問ランキング（要件定義書11章の並び順） |
 
 - `video_analysis_summary` と `video_rankings` は security invoker（既定）なので、ログインユーザーが呼ぶと RLS が効き、自分の動画のコメントしか数えない。
 

@@ -1,12 +1,16 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import type { RankingItem, VideoRankings } from "@/lib/rankings";
+import { cn } from "@/lib/utils";
 
 // 右の枠（要件定義書4.4）。
 // ランキング（スライス4）：開いている動画の、指摘・要望ランキングと質問ランキングを、1〜3位まで出す。
+//   項目を選ぶと、中央の枠のコメント一覧が、そのグループのコメントだけになる（URL の ?group=）。
+//   選んだ項目をもう一度選ぶと、元の一覧（タブ）に戻る。
 // AIアドバイスはスライス5で作る。それまでは「準備中」の枠だけを置く。
 
 /** 分析中に、ランキングを読み直す間隔（ミリ秒）。中央の枠の進み具合の確認と同じ間隔にする。 */
@@ -16,12 +20,25 @@ export function InsightsPane() {
   // 右の枠は、どの画面でも共通の枠（app-shell.tsx）なので、開いている動画を URL（/videos/:id）から読む。
   const videoId = usePathname().match(/^\/videos\/([^/]+)/)?.[1] ?? null;
   const rankings = useRankings(videoId);
+  const selected = useSearchParams().get("group");
 
   return (
     <div className="flex flex-col gap-4 p-4">
       <h2 className="text-sm font-semibold">インサイト</h2>
-      <RankingSection title="指摘・要望ランキング" videoId={videoId} rankings={rankings} items={rankings?.feedbackRequest} />
-      <RankingSection title="質問ランキング" videoId={videoId} rankings={rankings} items={rankings?.question} />
+      <RankingSection
+        title="指摘・要望ランキング"
+        videoId={videoId}
+        rankings={rankings}
+        items={rankings?.feedbackRequest}
+        selected={selected}
+      />
+      <RankingSection
+        title="質問ランキング"
+        videoId={videoId}
+        rankings={rankings}
+        items={rankings?.question}
+        selected={selected}
+      />
       <section className="rounded-lg border p-4">
         <h3 className="text-sm font-medium">AIアドバイス</h3>
         <p className="mt-2 text-sm text-muted-foreground">準備中です</p>
@@ -35,11 +52,14 @@ function RankingSection({
   videoId,
   rankings,
   items,
+  selected,
 }: {
   title: string;
   videoId: string | null;
   rankings: VideoRankings | null;
   items: RankingItem[] | undefined;
+  /** 選んでいるグループの id */
+  selected: string | null;
 }) {
   let message: string | null = null;
   if (!videoId) message = "動画を開くと表示されます";
@@ -54,15 +74,28 @@ function RankingSection({
       {message ? (
         <p className="mt-2 text-sm text-muted-foreground">{message}</p>
       ) : (
-        <ol className="mt-2 flex flex-col gap-2">
-          {items!.map((item) => (
-            <li key={item.rank} className="flex items-baseline gap-2 text-sm">
-              <span className="w-8 shrink-0 font-semibold">{item.rank}位</span>
-              {/* 代表論点は AI が作った文なので、HTML としてではなく文字として表示する（React の既定。要件定義書16章） */}
-              <span className="min-w-0 flex-1 break-words">{item.text}</span>
-              <span className="shrink-0 text-muted-foreground">{item.count}件</span>
-            </li>
-          ))}
+        <ol className="mt-2 flex flex-col gap-1">
+          {items!.map((item) => {
+            const active = item.id === selected;
+            return (
+              <li key={item.id}>
+                <Link
+                  // 選んでいる項目をもう一度選ぶと、絞り込みを解除する。
+                  href={active ? `/videos/${videoId}` : `/videos/${videoId}?group=${item.id}`}
+                  aria-current={active ? "true" : undefined}
+                  className={cn(
+                    "-mx-2 flex items-baseline gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted",
+                    active && "bg-secondary font-medium hover:bg-secondary",
+                  )}
+                >
+                  <span className="w-8 shrink-0 font-semibold">{item.rank}位</span>
+                  {/* 代表論点は AI が作った文なので、HTML としてではなく文字として表示する（React の既定。要件定義書16章） */}
+                  <span className="min-w-0 flex-1 break-words">{item.text}</span>
+                  <span className="shrink-0 text-muted-foreground">{item.count}件</span>
+                </Link>
+              </li>
+            );
+          })}
         </ol>
       )}
     </section>

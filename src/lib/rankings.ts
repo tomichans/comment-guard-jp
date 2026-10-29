@@ -7,6 +7,8 @@ import type { Enums } from "@/lib/database.types";
 // =============================================================
 
 export type RankingItem = {
+  /** グループの id。ランキングを選ぶと、このグループのコメントの一覧を出す（GET /api/videos/:id/comments の group） */
+  id: string;
   /** 順位（1から。同率は出さない） */
   rank: number;
   /** グループの代表論点（例：「音声・ナレーションが聞き取りづらい」） */

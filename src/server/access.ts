@@ -106,8 +106,16 @@ export type CommentThread = CommentWithAnalysis & {
   replies: CommentWithAnalysis[];
 };
 
+/** ランキングで選んだグループ（コメント一覧の絞り込みに使う）。 */
+export type SelectedGroup = Pick<Tables<"comment_groups">, "id" | "group_type" | "representative_text">;
+
 export type CommentThreadPage = {
   threads: CommentThread[];
+  /**
+   * group で絞り込んだときの、そのグループ（見出しの表示用）。
+   * 絞り込んでいないときと、グループが見つからない（この動画のものではない）ときは null。
+   */
+  group: SelectedGroup | null;
   /** 条件（タブ・検索語）に合うスレッドの総数 */
   total: number;
   /** 続きを読み込むときの offset。最後まで読み込んだら null。 */
@@ -120,6 +128,12 @@ export type CommentListOptions = {
   tab?: CommentTab;
   /** 親コメントの本文に含まれる語（部分一致）。空なら絞り込まない。 */
   q?: string;
+  /**
+   * ランキングのグループ（comment_groups.id）。指定すると、そのグループに入っているコメントだけにする。
+   * グループには分類の違うコメント（質問、指摘・要望、要望のラベルが付いたポジティブなど）が入るので、
+   * 指定したときは tab を使わない。
+   */
+  group?: string;
   offset?: number;
 };
 
@@ -153,14 +167,23 @@ const ONLY_ANALYZED = "*, comment_analysis!inner(primary_category, labels, revie
 export async function listCommentThreadsOfOwnedVideo(
   owner: Owner,
   videoId: string,
-  { sort = DEFAULT_COMMENT_SORT, tab = "all", q = "", offset = 0 }: CommentListOptions = {},
+  { sort = DEFAULT_COMMENT_SORT, tab = "all", q = "", group, offset = 0 }: CommentListOptions = {},
   now: Date = new Date(),
 ): Promise<CommentThreadPage | null> {
   const video = await findOwnedVideo(owner, videoId, now);
   if (!video) return null;
   const client = clientFor(owner);
+
+  // ランキングのグループで絞り込むとき：グループも、この動画のものに限って読む（他の動画のグループの id を渡されても、見つからない扱い）。
+  let selectedGroup: SelectedGroup | null = null;
+  if (group !== undefined) {
+    selectedGroup = isUuid(group) ? await findGroup(client, video.id, group) : null;
+    if (!selectedGroup) return { threads: [], group: null, total: 0, nextOffset: null };
+  }
+
   const analysisFailed = (await effectiveAnalysisStatus(video, now)) === "failed";
-  const includeUnanalyzed = analysisFailed && tab === "all";
+  // グループのコメントは、分析が済んだものだけ（グループは分析の結果から作るので）。
+  const includeUnanalyzed = analysisFailed && tab === "all" && !selectedGroup;
 
   // [Supabase固有] count: "exact" で、条件に合う行の総数も一緒に受け取る（「全123件」の表示用）。
   let query = client
@@ -169,7 +192,8 @@ export async function listCommentThreadsOfOwnedVideo(
     .eq("video_id", video.id)
     .is("parent_comment_id", null)
     .eq("comment_analysis.is_latest", true);
-  if (tab !== "all") query = query.eq("comment_analysis.primary_category", tab);
+  if (selectedGroup) query = query.eq("comment_analysis.group_id", selectedGroup.id);
+  else if (tab !== "all") query = query.eq("comment_analysis.primary_category", tab);
   // 検索するのは親コメントの本文だけ（返信は含めない。要件定義書4.3）。
   if (q) query = query.ilike("comment_text", `%${escapeLike(q)}%`);
   for (const column of SORT_COLUMNS[sort]) {
@@ -207,9 +231,26 @@ export async function listCommentThreadsOfOwnedVideo(
   const next = offset + parents.length;
   return {
     threads: parents.map((p) => ({ ...withAnalysis(p), replies: repliesByParent.get(p.id) ?? [] })),
+    group: selectedGroup,
     total,
     nextOffset: parents.length > 0 && next < total ? next : null,
   };
+}
+
+/** 動画のグループを1件読む。この動画のグループでなければ null。 */
+async function findGroup(
+  client: SupabaseClient<Database>,
+  videoId: string,
+  groupId: string,
+): Promise<SelectedGroup | null> {
+  const { data, error } = await client
+    .from("comment_groups")
+    .select("id, group_type, representative_text")
+    .eq("video_id", videoId)
+    .eq("id", groupId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
 }
 
 /** 埋め込みで受け取った comment_analysis（配列。最新の1件だけ）を、analysis（1件か null）に直す。 */

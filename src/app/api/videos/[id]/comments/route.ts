@@ -10,8 +10,9 @@ import { getRequestOwner } from "@/server/owner";
 //   tab    … 親コメントの分類（praise、question、feedback、negative_opinion、spam、harmful、all。省略時は all）
 //   sort   … newest（新しい順。省略時）、likes（いいねが多い順）、replies（返信が多い順）
 //   q      … 親コメントの本文の検索語（部分一致）
+//   group  … ランキングのグループの id。指定すると、そのグループのコメントだけにする（tab は使わない）
 //   offset … 続きを読み込むときに、前の応答の nextOffset を渡す
-// 成功：{ threads, total, nextOffset }。nextOffset が null なら最後まで読み込んだ。
+// 成功：{ threads, group, total, nextOffset }。group は group で絞り込んだときのグループ（見出しの表示用）。nextOffset が null なら最後まで読み込んだ。
 // 他人の動画・期限切れ・存在しない：404（動画の取得 API と同じ）。
 export async function GET(
   request: Request,
@@ -30,6 +31,7 @@ export async function GET(
         sort: isCommentSort(sort) ? sort : undefined,
         tab: isCommentTab(tab) ? tab : undefined,
         q: (search.get("q") ?? "").trim().slice(0, COMMENT_SEARCH_MAX_LENGTH),
+        group: search.get("group") ?? undefined,
         offset: Number.isSafeInteger(offset) && offset > 0 ? offset : 0,
       })
     : null;

@@ -72,7 +72,8 @@ grant execute on function public.refresh_group_counts(uuid) to service_role;
 --   3. それも同じなら、グループのいちばん新しいコメントが新しい順
 --   （最後に id で並べて、順番を毎回同じにする）
 -- 順位は 1、2、3 の連番にし、「同率」は出さない【確定】。件数が0のグループは出さない。
--- 返す値：{"feedback_request": [{rank, text, count}, ...], "question": [...]}
+-- 返す値：{"feedback_request": [{id, rank, text, count}, ...], "question": [...]}
+--   id はグループの id。画面でランキングを選んだときに、そのグループのコメントの一覧を出すのに使う。
 -- security invoker（既定）なので、ログインユーザーのクライアントで呼ぶと RLS が効く（video_analysis_summary と同じ）。
 create function public.video_rankings(p_video_id uuid, p_limit integer)
 returns json
@@ -100,11 +101,11 @@ as $$
   )
   select json_build_object(
     'feedback_request', coalesce((
-      select json_agg(json_build_object('rank', r.rank, 'text', r.representative_text, 'count', r.comment_count) order by r.rank)
+      select json_agg(json_build_object('id', r.id, 'rank', r.rank, 'text', r.representative_text, 'count', r.comment_count) order by r.rank)
       from ranked r where r.group_type = 'feedback_request' and r.rank <= p_limit
     ), '[]'::json),
     'question', coalesce((
-      select json_agg(json_build_object('rank', r.rank, 'text', r.representative_text, 'count', r.comment_count) order by r.rank)
+      select json_agg(json_build_object('id', r.id, 'rank', r.rank, 'text', r.representative_text, 'count', r.comment_count) order by r.rank)
       from ranked r where r.group_type = 'question' and r.rank <= p_limit
     ), '[]'::json)
   )

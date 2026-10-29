@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 
-import { getRankingsOfOwnedVideo, type Owner } from "@/server/access";
+import { getRankingsOfOwnedVideo, listCommentThreadsOfOwnedVideo, type Owner } from "@/server/access";
 import { analyzeVideoComments } from "@/server/analysis/analyze";
 import { saveComments } from "@/server/comments/save";
 
@@ -182,12 +182,13 @@ describe("ランキング（要件定義書11章）", () => {
     const rankings = await getRankingsOfOwnedVideo(owner, video.id);
 
     // 確認：音（2件）が1位。1件どうしは、いいねの多い曲、字幕の順。機材は4位なので出ない
+    // id（グループの id）は、ランキングを選んだときのコメント一覧の絞り込みに使う
     expect(rankings).toEqual({
       status: "done",
       feedbackRequest: [
-        { rank: 1, text: "論点：音が小さいので直してほしい", count: 2 },
-        { rank: 2, text: "論点：曲名を概要欄に記載してほしい", count: 1 },
-        { rank: 3, text: "論点：字幕を表示してほしい", count: 1 },
+        { id: expect.any(String), rank: 1, text: "論点：音が小さいので直してほしい", count: 2 },
+        { id: expect.any(String), rank: 2, text: "論点：曲名を概要欄に記載してほしい", count: 1 },
+        { id: expect.any(String), rank: 3, text: "論点：字幕を表示してほしい", count: 1 },
       ],
       question: [],
     });
@@ -228,5 +229,53 @@ describe("ランキング（要件定義書11章）", () => {
     const guestB: Owner = { kind: "guest", guestId: newGuestId() };
 
     expect(await getRankingsOfOwnedVideo(guestB, video.id)).toBeNull();
+  });
+});
+
+describe("ランキングを選んだときのコメント一覧（グループで絞り込む）", () => {
+  afterAll(cleanup);
+
+  it("グループに入っているコメントだけを返し、グループの見出しも返す", async () => {
+    // 準備：音のグループ（2件）と、字幕のグループ（1件）
+    const { owner, video } = await createGuestVideo([
+      { text: "音が小さいので直してほしい" },
+      { text: "BGMの音を小さくしてほしい" },
+      { text: "字幕を表示してほしい" },
+      { text: "最高でした" },
+    ]);
+    await analyzeVideoComments(video, { ai: fakeAi() });
+    const rankings = await getRankingsOfOwnedVideo(owner, video.id);
+    const sound = rankings!.feedbackRequest[0];
+
+    // 実行
+    const page = await listCommentThreadsOfOwnedVideo(owner, video.id, { group: sound.id });
+
+    // 確認：ランキングの件数と同じコメントが出る（新しい順）
+    expect(page?.threads.map((t) => t.comment_text)).toEqual([
+      "BGMの音を小さくしてほしい",
+      "音が小さいので直してほしい",
+    ]);
+    expect(page?.total).toBe(sound.count);
+    expect(page?.group).toEqual({
+      id: sound.id,
+      group_type: "feedback_request",
+      representative_text: "論点：音が小さいので直してほしい",
+    });
+  });
+
+  it("他の動画のグループの id を渡しても、コメントは出ない（アクセス制御）", async () => {
+    // 準備：ゲストAの動画のグループ
+    const a = await createGuestVideo([{ text: "字幕を表示してほしい" }]);
+    await analyzeVideoComments(a.video, { ai: fakeAi() });
+    const groupOfA = (await getRankingsOfOwnedVideo(a.owner, a.video.id))!.feedbackRequest[0].id;
+    // ゲストBの動画
+    const b = await createGuestVideo([{ text: "字幕を表示してほしい" }]);
+    await analyzeVideoComments(b.video, { ai: fakeAi() });
+
+    // 実行：ゲストBが、自分の動画の一覧に、ゲストAのグループの id を付けて読む
+    const page = await listCommentThreadsOfOwnedVideo(b.owner, b.video.id, { group: groupOfA });
+
+    // 確認：見つからない扱い（ゲストAのコメントも、ゲストBのコメントも出ない）
+    expect(page).toEqual({ threads: [], group: null, total: 0, nextOffset: null });
   });
 });
