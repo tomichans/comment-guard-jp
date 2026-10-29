@@ -242,7 +242,7 @@ isOneToOne: false
 "comment_text": string,
 "labels": (string)[],
 "primary_category": Database["public"]['Enums']["primary_category"],
-"topic": string | null
+"topic": string
             }[]
                            },
 "refresh_group_counts":
