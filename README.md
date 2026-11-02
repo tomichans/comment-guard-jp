@@ -71,6 +71,7 @@ npm run dev   # http://localhost:3000
 3. 「Limits」で、月の利用額の上限を低め（例：5ドル）に設定しておく（キーが漏れたときや、使いすぎたときの被害を減らすため）
 
 分類に使うモデルは `src/lib/config/analysis.ts` の `DEFAULT_CLASSIFY_MODEL`。`.env.local` の `OPENAI_CLASSIFY_MODEL` で上書きできる。
+AIアドバイスに使うモデルは同じファイルの `DEFAULT_ADVICE_MODEL`（`gpt-6.1-sol`）。`.env.local` の `OPENAI_ADVICE_MODEL` で上書きできる。
 1回の呼び出しごとのトークン数と推定費用は、`api_usage_logs` テーブル（`service = 'openai'`）で確認できる。
 
 ## テスト
