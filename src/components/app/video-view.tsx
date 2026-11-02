@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, RefreshCw, TriangleAlert } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,9 @@ type VideoDetail = { video: Video; analysis: AnalysisSummary };
 export function VideoView({ videoId }: { videoId: string }) {
   const { reloadVideos } = useApp();
   const router = useRouter();
+  // 右の枠のランキングで選んだグループ（/videos/:id?group=…）。選ぶとコメント一覧がそのグループのコメントだけになる。
+  // URL に持たせるのは、再読み込みやブラウザの「戻る」で、同じ表示に戻れるようにするため（要件定義書4.1と同じ考え方）。
+  const group = useSearchParams().get("group");
   const [detail, setDetail] = useState<VideoDetail | null>(null);
   // コメント一覧を読み込み直すための番号。増やすと、一覧が最初から読み込み直される。
   const [listVersion, setListVersion] = useState(0);
@@ -167,6 +170,7 @@ export function VideoView({ videoId }: { videoId: string }) {
         version={listVersion}
         counts={analysis.counts}
         analyzing={analysis.status === "analyzing"}
+        group={group}
       />
     </div>
   );

@@ -7,6 +7,8 @@ import { createAdminClient, type AdminClient } from "@/server/supabase/admin";
 import type { UsageContext } from "@/server/usage";
 
 import { openAiAnalysis, type AnalysisAi } from "./ai";
+import { groupPendingComments } from "./group-comments";
+import { topicsOf } from "./grouping";
 import { effectiveAnalysisStatus } from "./status";
 import { decideAnalysis, isHarmfulByNgWord, matchNgWords, type NgWord } from "./rules";
 
@@ -19,7 +21,9 @@ import { decideAnalysis, isHarmfulByNgWord, matchNgWords, type NgWord } from "./
 //      a. NGワードを探す。severity=5 にヒットしたものは、AI を通さずに harmful
 //      b. 残りを、Moderation API と分類 AI に送る（2つは同時に送る）
 //      c. 結果を合わせて最終的な分類を決め、comment_analysis に保存する
-//   3. 1 に戻る。分析されていないコメントがなくなったら、analysis_status を done にする
+//      d. AI が出した論点（質問の論点と、指摘・要望の論点）を、comment_topics に保存する（ランキングに数えるものだけ）
+//   3. 分類できた分を、似たコメントのグループに振り分ける（group-comments.ts。要件定義書10章）
+//   4. 1 に戻る。分析されていないコメントがなくなったら、analysis_status を done にする
 //
 // 裏での実行方法【確定】：コメントの残りの取得と同じく、Next.js の after() で、レスポンスを返した後に実行する。
 // ここの関数は「実行する関数」を作るだけで、after() に渡すのは API Route（呼び出し側）の役目。
@@ -53,7 +57,7 @@ export function runAfterRegister(
  * fetching を渡すと、分析するコメントがなくなっても、その取得が終わるまで待ってから、取得した分も分析する。
  */
 export async function analyzeVideoComments(
-  video: Pick<Video, "id" | "user_id" | "guest_id">,
+  video: Pick<Video, "id" | "user_id" | "guest_id" | "title">,
   { ai = openAiAnalysis, fetching = null }: { ai?: AnalysisAi; fetching?: Promise<void> | null } = {},
 ): Promise<void> {
   const admin = createAdminClient();
@@ -77,6 +81,17 @@ export async function analyzeVideoComments(
         p_limit: CLASSIFY_BATCH_SIZE * CLASSIFY_CONCURRENCY,
       });
       if (error) throw error;
+      const batches = chunk(comments, CLASSIFY_BATCH_SIZE);
+      // 1つのまとまりが失敗しても、他のまとまりは最後まで終わらせてから止める（分析できた分は保存しておく）。
+      const settled = await Promise.allSettled(
+        batches.map((batch) => analyzeBatch(admin, batch, video.title, ngWords, ai, ctx)),
+      );
+      // 分類できた分を、グループに振り分ける（要件定義書10章）。1まわりごとに行うので、ランキングも少しずつ出てくる。
+      // 分類するコメントがない回も呼ぶ。前回の分析で、分類は済んだがグループに入っていないコメントを拾うため。
+      await groupPendingComments(admin, video.id, ai, ctx);
+      const failure = settled.find((r) => r.status === "rejected");
+      if (failure) throw failure.reason;
+
       if (comments.length === 0) {
         if (!fetchDone) {
           await fetching;
@@ -84,13 +99,6 @@ export async function analyzeVideoComments(
         }
         break;
       }
-      const batches = chunk(comments, CLASSIFY_BATCH_SIZE);
-      // 1つのまとまりが失敗しても、他のまとまりは最後まで終わらせてから止める（分析できた分は保存しておく）。
-      const settled = await Promise.allSettled(
-        batches.map((batch) => analyzeBatch(admin, batch, ngWords, ai, ctx)),
-      );
-      const failure = settled.find((r) => r.status === "rejected");
-      if (failure) throw failure.reason;
     }
   } catch (e) {
     // 23503 = foreign_key_violation。分析中にユーザーが動画を削除すると、結果を保存しようとした時点でこのエラーになる。
@@ -121,6 +129,7 @@ export async function analyzeVideoComments(
 async function analyzeBatch(
   admin: AdminClient,
   comments: Comment[],
+  videoTitle: string,
   ngWords: NgWord[],
   ai: AnalysisAi,
   ctx: UsageContext,
@@ -135,6 +144,7 @@ async function analyzeBatch(
       : await Promise.all([
           ai.classify(
             toAi.map((i) => ({ text: comments[i].comment_text, ngHints: matches[i].words })),
+            videoTitle,
             ctx,
           ),
           ai.moderate(
@@ -145,14 +155,22 @@ async function analyzeBatch(
   const aiPosition = new Map(toAi.map((commentIndex, position) => [commentIndex, position]));
 
   const analyzedAt = new Date().toISOString();
-  const rows = comments.map((comment, i) => {
+  const results = comments.map((comment, i) => {
     const position = aiPosition.get(i);
+    const classification = position === undefined ? null : classifications[position];
     const decision = decideAnalysis(
       matches[i],
-      position === undefined ? null : classifications[position],
+      classification,
       position === undefined ? null : moderations[position],
     );
-    return {
+    // ランキングに数える論点（0〜2個）。グループと embedding は、この後の groupPendingComments で書き込む。
+    const topics = topicsOf({
+      isReply: comment.parent_comment_id !== null,
+      primaryCategory: decision.primaryCategory,
+      questionTopic: classification?.questionTopic ?? null,
+      feedbackTopic: classification?.feedbackTopic ?? null,
+    });
+    const row = {
       comment_id: comment.id,
       is_latest: true,
       analyzed_at: analyzedAt,
@@ -161,12 +179,34 @@ async function analyzeBatch(
       ng_words: decision.ngWords.length > 0 ? decision.ngWords : null,
       score: decision.score,
       review_required: decision.reviewRequired,
-      // グループ（group_id）と embedding は、スライス4で扱う。
     };
+    return { row, topics };
   });
 
-  const { error } = await admin.from("comment_analysis").insert(rows);
+  const { data: saved, error } = await admin
+    .from("comment_analysis")
+    .insert(results.map((r) => r.row))
+    .select("id, comment_id");
   if (error) throw error;
+
+  // 保存した分析結果の id に、論点をぶら下げる（comment_id で対応を付ける。DB の返す順番には頼らない）。
+  const analysisIdOf = new Map(saved.map((a) => [a.comment_id, a.id]));
+  const topicRows = results.flatMap(({ row, topics }) =>
+    topics.map((t) => ({
+      analysis_id: analysisIdOf.get(row.comment_id)!,
+      group_type: t.groupType,
+      topic: t.topic,
+    })),
+  );
+  if (topicRows.length > 0) {
+    const { error: topicsError } = await admin.from("comment_topics").insert(topicRows);
+    if (topicsError) {
+      // 論点だけが抜けた分析結果を残すと、そのコメントは「分析済み」のまま、ランキングに二度と数えられない。
+      // 分析結果も消して「まだ分析されていない」に戻し、「分析をやり直す」で論点ごと作り直せるようにする。
+      await admin.from("comment_analysis").delete().in("id", saved.map((a) => a.id));
+      throw topicsError;
+    }
+  }
 }
 
 async function loadNgWords(admin: AdminClient): Promise<NgWord[]> {

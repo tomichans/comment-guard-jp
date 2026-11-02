@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isCommentTab } from "@/lib/comment-categories";
 import { COMMENT_SEARCH_MAX_LENGTH, isCommentSort } from "@/lib/comment-list";
+import { isGroupCommentTab } from "@/lib/rankings";
 import { listCommentThreadsOfOwnedVideo } from "@/server/access";
 import { getRequestOwner } from "@/server/owner";
 
@@ -10,8 +11,10 @@ import { getRequestOwner } from "@/server/owner";
 //   tab    … 親コメントの分類（praise、question、feedback、negative_opinion、spam、harmful、all。省略時は all）
 //   sort   … newest（新しい順。省略時）、likes（いいねが多い順）、replies（返信が多い順）
 //   q      … 親コメントの本文の検索語（部分一致）
+//   group  … ランキングのグループの id。指定すると、そのグループに論点が入っているコメントだけにする（tab は使わない）
+//   gtab   … group を指定したときのタブ。calm（おだやか。省略時）、harmful（要注意）
 //   offset … 続きを読み込むときに、前の応答の nextOffset を渡す
-// 成功：{ threads, total, nextOffset }。nextOffset が null なら最後まで読み込んだ。
+// 成功：{ threads, group, groupCounts, total, nextOffset }。group と groupCounts は、group で絞り込んだときのグループ（見出しの表示用）と、タブごとの件数。nextOffset が null なら最後まで読み込んだ。
 // 他人の動画・期限切れ・存在しない：404（動画の取得 API と同じ）。
 export async function GET(
   request: Request,
@@ -21,6 +24,7 @@ export async function GET(
   const search = new URL(request.url).searchParams;
   const sort = search.get("sort");
   const tab = search.get("tab");
+  const gtab = search.get("gtab");
   const offset = Number(search.get("offset") ?? 0);
 
   const owner = await getRequestOwner();
@@ -30,6 +34,8 @@ export async function GET(
         sort: isCommentSort(sort) ? sort : undefined,
         tab: isCommentTab(tab) ? tab : undefined,
         q: (search.get("q") ?? "").trim().slice(0, COMMENT_SEARCH_MAX_LENGTH),
+        group: search.get("group") ?? undefined,
+        groupTab: isGroupCommentTab(gtab) ? gtab : undefined,
         offset: Number.isSafeInteger(offset) && offset > 0 ? offset : 0,
       })
     : null;

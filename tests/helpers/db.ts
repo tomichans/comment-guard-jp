@@ -148,11 +148,23 @@ export async function insertChildren(videoId: string) {
       analyzed_at: new Date().toISOString(),
       primary_category: "feedback",
       labels: ["request"],
-      group_id: group.data.id,
     })
     .select()
     .single();
   if (analysis.error) throw analysis.error;
+
+  const topic = await admin
+    .from("comment_topics")
+    .insert({
+      analysis_id: analysis.data.id,
+      group_type: "feedback_request",
+      topic: "BGMの音量",
+      embedding: DUMMY_EMBEDDING,
+      group_id: group.data.id,
+    })
+    .select()
+    .single();
+  if (topic.error) throw topic.error;
 
   const advice = await admin
     .from("advice_logs")
@@ -171,13 +183,14 @@ export async function insertChildren(videoId: string) {
     commentId: comment.data.id,
     groupId: group.data.id,
     analysisId: analysis.data.id,
+    topicId: topic.data.id,
     adviceId: advice.data.id,
   };
 }
 
 /** 指定したテーブルに、その id の行が残っているか。 */
 export async function exists(
-  table: "videos" | "comments" | "comment_groups" | "comment_analysis" | "advice_logs",
+  table: "videos" | "comments" | "comment_groups" | "comment_analysis" | "comment_topics" | "advice_logs",
   id: string,
 ): Promise<boolean> {
   const { data, error } = await admin.from(table).select("id").eq("id", id);

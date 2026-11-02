@@ -71,14 +71,14 @@ isOneToOne: false
                   ]
                 },"comment_analysis": {
                   Row: {
-                    "analyzed_at": string,"comment_id": string,"created_at": string,"embedding": string | null,"group_id": string | null,"id": string,"is_latest": boolean,"labels": (string)[],"ng_words": (string)[] | null,"primary_category": Database["public"]['Enums']["primary_category"],"review_required": boolean | null,"score": number | null
+                    "analyzed_at": string,"comment_id": string,"created_at": string,"id": string,"is_latest": boolean,"labels": (string)[],"ng_words": (string)[] | null,"primary_category": Database["public"]['Enums']["primary_category"],"review_required": boolean | null,"score": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "analyzed_at": string,"comment_id": string,"created_at"?: string,"embedding"?: string | null,"group_id"?: string | null,"id"?: string,"is_latest"?: boolean,"labels"?: (string)[],"ng_words"?: (string)[] | null,"primary_category": Database["public"]['Enums']["primary_category"],"review_required"?: boolean | null,"score"?: number | null
+                    "analyzed_at": string,"comment_id": string,"created_at"?: string,"id"?: string,"is_latest"?: boolean,"labels"?: (string)[],"ng_words"?: (string)[] | null,"primary_category": Database["public"]['Enums']["primary_category"],"review_required"?: boolean | null,"score"?: number | null
                   }
                   Update: {
-                    "analyzed_at"?: string,"comment_id"?: string,"created_at"?: string,"embedding"?: string | null,"group_id"?: string | null,"id"?: string,"is_latest"?: boolean,"labels"?: (string)[],"ng_words"?: (string)[] | null,"primary_category"?: Database["public"]['Enums']["primary_category"],"review_required"?: boolean | null,"score"?: number | null
+                    "analyzed_at"?: string,"comment_id"?: string,"created_at"?: string,"id"?: string,"is_latest"?: boolean,"labels"?: (string)[],"ng_words"?: (string)[] | null,"primary_category"?: Database["public"]['Enums']["primary_category"],"review_required"?: boolean | null,"score"?: number | null
                   }
                   Relationships: [
                     {
@@ -86,12 +86,6 @@ isOneToOne: false
       columns: ["comment_id"]
 isOneToOne: false
       referencedRelation: "comments"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "comment_analysis_group_id_fkey"
-      columns: ["group_id"]
-isOneToOne: false
-      referencedRelation: "comment_groups"
       referencedColumns: ["id"]
     }
                   ]
@@ -112,6 +106,32 @@ isOneToOne: false
       columns: ["video_id"]
 isOneToOne: false
       referencedRelation: "videos"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"comment_topics": {
+                  Row: {
+                    "analysis_id": string,"created_at": string,"embedding": string | null,"group_id": string | null,"group_type": Database["public"]['Enums']["group_type"],"id": string,"topic": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "analysis_id": string,"created_at"?: string,"embedding"?: string | null,"group_id"?: string | null,"group_type": Database["public"]['Enums']["group_type"],"id"?: string,"topic": string
+                  }
+                  Update: {
+                    "analysis_id"?: string,"created_at"?: string,"embedding"?: string | null,"group_id"?: string | null,"group_type"?: Database["public"]['Enums']["group_type"],"id"?: string,"topic"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "comment_topics_analysis_id_fkey"
+      columns: ["analysis_id"]
+isOneToOne: false
+      referencedRelation: "comment_analysis"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "comment_topics_group_id_fkey"
+      columns: ["group_id"]
+isOneToOne: false
+      referencedRelation: "comment_groups"
       referencedColumns: ["id"]
     }
                   ]
@@ -236,8 +256,21 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"comments_to_group":
+{ Args: { "p_limit": number,"p_video_id": string }; Returns: {
+              "group_type": Database["public"]['Enums']["group_type"],
+"topic": string,
+"topic_id": string
+            }[]
+                           },
+"refresh_group_counts":
+{ Args: { "p_video_id": string }; Returns: undefined
+                           },
 "video_analysis_summary":
 { Args: { "p_video_id": string }; Returns: Json
+                           },
+"video_rankings":
+{ Args: { "p_limit": number,"p_video_id": string }; Returns: Json
                            }
           }
           Enums: {
