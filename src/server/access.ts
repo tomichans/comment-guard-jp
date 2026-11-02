@@ -13,7 +13,8 @@ import {
   type CommentTab,
   type PrimaryCategory,
 } from "@/lib/comment-categories";
-import { RANKING_SIZE } from "@/lib/config/analysis";
+import type { VideoAdvice } from "@/lib/advice";
+import { ADVICE_MIN_ANALYZED_COMMENTS, RANKING_SIZE } from "@/lib/config/analysis";
 import { expiryCutoff, isExpired } from "@/lib/config/retention";
 import type { Database, Tables } from "@/lib/database.types";
 import {
@@ -382,6 +383,61 @@ export async function getRankingsOfOwnedVideo(
   if (error) throw error;
   const rankings = data as { feedback_request: RankingItem[]; question: RankingItem[] };
   return { status, feedbackRequest: rankings.feedback_request, question: rankings.question };
+}
+
+/**
+ * 自分の動画の、最新のAIアドバイス（要件定義書12章）。動画が自分のものでなければ null。
+ * 「最新」は generated_at の新しい順で決める（is_latest のような印は持たない。要件定義書13.2）。
+ */
+export async function getAdviceOfOwnedVideo(
+  owner: Owner,
+  videoId: string,
+  now: Date = new Date(),
+): Promise<VideoAdvice | null> {
+  const video = await findOwnedVideo(owner, videoId, now);
+  if (!video) return null;
+  const client = clientFor(owner);
+
+  const [status, { data, error }] = await Promise.all([
+    effectiveAnalysisStatus(video, now),
+    client
+      .from("advice_logs")
+      .select("advice_summary, advice_text, generated_at")
+      .eq("video_id", video.id)
+      .order("generated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (error) throw error;
+
+  if (data) {
+    return {
+      status,
+      state: "ready",
+      advice: { summary: data.advice_summary, text: data.advice_text, generatedAt: data.generated_at },
+    };
+  }
+  if (status === "analyzing") return { status, state: "waiting", advice: null };
+  if (status === "failed") return { status, state: "failed", advice: null };
+  // 分析は終わったのにアドバイスがない：コメントが少なくて作らなかったのか、それ以外（スライス5より前の動画など）かを分ける。
+  const analyzed = await countAnalyzedParents(client, video.id);
+  return {
+    status,
+    state: analyzed < ADVICE_MIN_ANALYZED_COMMENTS ? "too_few" : "unavailable",
+    advice: null,
+  };
+}
+
+/** 分析が済んだ親コメントの数（アドバイスを作るかどうかの判定と同じ数え方。src/server/analysis/advice.ts） */
+async function countAnalyzedParents(client: SupabaseClient<Database>, videoId: string): Promise<number> {
+  const { count, error } = await client
+    .from("comments")
+    .select("id, comment_analysis!inner(id)", { count: "exact", head: true })
+    .eq("video_id", videoId)
+    .is("parent_comment_id", null)
+    .eq("comment_analysis.is_latest", true);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 async function countParents(owner: Owner, videoId: string): Promise<number> {

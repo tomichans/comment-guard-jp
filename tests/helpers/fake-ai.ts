@@ -1,4 +1,4 @@
-import type { AnalysisAi, ClassifyInput } from "@/server/analysis/ai";
+import type { AdviceInput, AnalysisAi, ClassifyInput } from "@/server/analysis/ai";
 import type { AiClassification, ModerationResult } from "@/server/analysis/rules";
 
 // =============================================================
@@ -22,6 +22,8 @@ import type { AiClassification, ModerationResult } from "@/server/analysis/rules
 //   - 「？」を含む         → 質問の論点（questionTopic）＝「論点：」＋本文
 //   - 「してほしい」を含む → 指摘・要望の論点（feedbackTopic）＝「論点：」＋本文
 //   グルーピングでは、この論点の Embedding を比べる
+// アドバイスのルール
+//   - 決まった文を返す。受け取ったデータは adviceInputs に記録する（何を AI に渡したかを確かめるため）
 // =============================================================
 
 /** Embedding の話題。この語を含む本文は、同じベクトルになる（＝同じグループになる）。 */
@@ -37,6 +39,8 @@ export type FakeAi = AnalysisAi & {
   videoTitles: string[];
   /** embed に渡された本文の記録（classified と同じ形） */
   embedded: string[][];
+  /** advise に渡されたデータの記録（呼び出しの順） */
+  adviceInputs: AdviceInput[];
 };
 
 function classifyOne(text: string): AiClassification {
@@ -79,18 +83,23 @@ function embedOne(text: string): number[] {
  * 偽物の AI を作る。
  * failOnCall に番号（1から数える）を渡すと、その回の classify でエラーを投げる（AI の障害を再現する）。
  * failEmbedding を true にすると、embed が毎回エラーを投げる。
+ * failAdvice を true にすると、advise が毎回エラーを投げる。
  */
-export function fakeAi(opts: { failOnCall?: number; failEmbedding?: boolean } = {}): FakeAi {
+export function fakeAi(
+  opts: { failOnCall?: number; failEmbedding?: boolean; failAdvice?: boolean } = {},
+): FakeAi {
   const classified: string[][] = [];
   const embedded: string[][] = [];
   const hints = new Map<string, string[]>();
   const videoTitles: string[] = [];
+  const adviceInputs: AdviceInput[] = [];
 
   return {
     classified,
     hints,
     videoTitles,
     embedded,
+    adviceInputs,
 
     async classify(inputs: ClassifyInput[], videoTitle: string) {
       classified.push(inputs.map((input) => input.text));
@@ -110,6 +119,18 @@ export function fakeAi(opts: { failOnCall?: number; failEmbedding?: boolean } = 
       embedded.push(texts);
       if (opts.failEmbedding) throw new Error("Embedding の障害（テスト）");
       return texts.map(embedOne);
+    },
+
+    async advise(input: AdviceInput) {
+      adviceInputs.push(input);
+      if (opts.failAdvice) throw new Error("アドバイスの AI の障害（テスト）");
+      return {
+        summary: "手順が分かりやすいと好評でした。",
+        goodPoints: ["手順が分かりやすいという声が多くありました。"],
+        improvements: ["音についての声が多かったので、音量を見直すとさらに見やすくなりそうです。"],
+        gentleSuggestions: [],
+        nextVideoIdeas: ["よく聞かれた質問に答える動画"],
+      };
     },
   };
 }

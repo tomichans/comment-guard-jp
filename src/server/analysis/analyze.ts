@@ -6,6 +6,7 @@ import { findOwnedVideo, type Owner } from "@/server/access";
 import { createAdminClient, type AdminClient } from "@/server/supabase/admin";
 import type { UsageContext } from "@/server/usage";
 
+import { generateAdvice } from "./advice";
 import { openAiAnalysis, type AnalysisAi } from "./ai";
 import { groupPendingComments } from "./group-comments";
 import { topicsOf } from "./grouping";
@@ -23,12 +24,14 @@ import { decideAnalysis, isHarmfulByNgWord, matchNgWords, type NgWord } from "./
 //      c. 結果を合わせて最終的な分類を決め、comment_analysis に保存する
 //      d. AI が出した論点（質問の論点と、指摘・要望の論点）を、comment_topics に保存する（ランキングに数えるものだけ）
 //   3. 分類できた分を、似たコメントのグループに振り分ける（group-comments.ts。要件定義書10章）
-//   4. 1 に戻る。分析されていないコメントがなくなったら、analysis_status を done にする
+//   4. 1 に戻る。分析されていないコメントがなくなったら、AIアドバイスを作り（advice.ts。要件定義書12章）、
+//      analysis_status を done にする
 //
 // 裏での実行方法【確定】：コメントの残りの取得と同じく、Next.js の after() で、レスポンスを返した後に実行する。
 // ここの関数は「実行する関数」を作るだけで、after() に渡すのは API Route（呼び出し側）の役目。
 //
 // 失敗したとき【確定】（要件定義書15.2）：analysis_status を failed にする。分析済みの結果は残す。
+// アドバイスを作るのに失敗したときも、同じく failed にする（「分析をやり直す」で、アドバイスだけ作り直せる）。
 // 画面の「分析をやり直す」から、まだ分析されていないコメントだけを分析し直せる（retryAnalysis）。
 // =============================================================
 
@@ -100,6 +103,9 @@ export async function analyzeVideoComments(
         break;
       }
     }
+    // すべてのコメントの分析が終わったら、アドバイスを作る（1動画につき1回。要件定義書12章）。
+    // 分析が done になる前に作るので、画面は「分析中」のまま待ち、done になったときにはアドバイスがそろっている。
+    await generateAdvice(admin, video, ai, ctx);
   } catch (e) {
     // 23503 = foreign_key_violation。分析中にユーザーが動画を削除すると、結果を保存しようとした時点でこのエラーになる。
     // 失敗ではないので、ログを出さずに止める（コメントの残りの取得と同じ。src/server/videos/register.ts）。
