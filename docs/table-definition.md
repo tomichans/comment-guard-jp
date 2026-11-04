@@ -128,9 +128,9 @@
 
 | 値 | 意味 |
 | --- | --- |
-| `analyzing` | コメントを分析中（要件定義書5章） |
+| `analyzing` | コメントを分析中（要件定義書5章）。分析の後のAIアドバイスづくりの間も `analyzing` のまま【確定】（要件定義書12.3） |
 | `done` | 分析完了 |
-| `failed` | 途中で失敗（分析済みの結果は残る。要件定義書15.2） |
+| `failed` | 途中で失敗（分析済みの結果は残る。要件定義書15.2）。AIアドバイスづくりの失敗も含む |
 
 ---
 
@@ -274,6 +274,8 @@ CHECK (
 | `created_at` | timestamptz | yes |  | レコード作成日時（DB保存時刻） |
 
 - 再生成時は既存行を上書きせず、新しい行をINSERTして履歴を残す。
+- `advice_text` は「■ 見出し」と「・項目」の行からなる文章。`advice_summary` は全体のまとめ（1〜2文）【確定】（要件定義書12.2.1）。
+- `model_version` には、使ったモデル名（例：`gpt-6.1-sol`）を入れる。
 - 「最新のアドバイス」は、`video_id` ＋ `generated_at` の降順で取得する。
 
 ### 5.7 users（ログインユーザー）
@@ -312,7 +314,7 @@ CHECK (
 | --- | --- | --- | --- | --- |
 | `id` | uuid | yes | PK | 主キー |
 | `service` | text | yes |  | `'youtube'` または `'openai'` |
-| `endpoint` | text | yes |  | 呼んだAPI（`'videos.list'`、`'commentThreads.list'`、`'classify'`（分類のAI）、`'moderations'`（Moderation API）、`'embeddings'`（グルーピングの Embedding）） |
+| `endpoint` | text | yes |  | 呼んだAPI（`'videos.list'`、`'commentThreads.list'`、`'classify'`（分類のAI）、`'moderations'`（Moderation API）、`'embeddings'`（グルーピングの Embedding）、`'advice'`（AIアドバイス）） |
 | `units` | integer | no |  | YouTube APIのクォータ消費量 |
 | `model` | text | no |  | AIのモデル名 |
 | `input_tokens` | integer | no |  | AIの入力トークン数 |

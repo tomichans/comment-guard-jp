@@ -1,6 +1,6 @@
 import "server-only";
 
-import { DEFAULT_CLASSIFY_MODEL } from "@/lib/config/analysis";
+import { DEFAULT_ADVICE_MODEL, DEFAULT_CLASSIFY_MODEL } from "@/lib/config/analysis";
 
 // =============================================================
 // サーバー専用の環境変数
@@ -48,5 +48,9 @@ export const serverEnv = {
   // 分類に使うモデル名。未設定なら src/lib/config/analysis.ts の既定のモデルを使う。
   get openaiClassifyModel() {
     return process.env.OPENAI_CLASSIFY_MODEL || DEFAULT_CLASSIFY_MODEL;
+  },
+  // AIアドバイスに使うモデル名。未設定なら src/lib/config/analysis.ts の既定のモデルを使う。
+  get openaiAdviceModel() {
+    return process.env.OPENAI_ADVICE_MODEL || DEFAULT_ADVICE_MODEL;
   },
 };

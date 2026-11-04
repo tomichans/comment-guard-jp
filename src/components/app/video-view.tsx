@@ -155,8 +155,15 @@ export function VideoView({ videoId }: { videoId: string }) {
       {analysis.status === "failed" && (
         <Notice icon={<TriangleAlert className="size-4" />}>
           <span className="flex-1">
-            一部のコメントを分析できませんでした（{analysis.analyzed}／{analysis.total}件が分析済み）。
-            分析できなかったコメントは「すべて」タブで確認できます。
+            {analysis.analyzed < analysis.total ? (
+              <>
+                一部のコメントを分析できませんでした（{analysis.analyzed}／{analysis.total}件が分析済み）。
+                分析できなかったコメントは「すべて」タブで確認できます。
+              </>
+            ) : (
+              // コメントの分析はすべて済んだが、その後の仕上げ（ランキングのグループ分けや、AIアドバイスづくり）で失敗したとき。
+              <>コメントの分析は終わりましたが、ランキングやAIアドバイスを作れませんでした。</>
+            )}
           </span>
           <Button variant="outline" size="sm" onClick={handleRetry} disabled={retrying}>
             {retrying ? <Loader2 className="animate-spin" /> : <RefreshCw />}
