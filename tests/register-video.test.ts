@@ -1,6 +1,10 @@
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-import { GUEST_DAILY_VIDEO_LIMIT } from "@/lib/config/limits";
+import {
+  GUEST_DAILY_VIDEO_LIMIT,
+  SERVICE_DAILY_VIDEO_LIMIT,
+  USER_DAILY_VIDEO_LIMIT,
+} from "@/lib/config/limits";
 import { VideoError } from "@/server/video-errors";
 import { registerVideo, type Registrant } from "@/server/videos/register";
 
@@ -181,6 +185,62 @@ describe("ゲストの上限（要件定義書3.1）", () => {
 
   it("IP が分からない場合は、IP単位の上限をかけない", async () => {
     await registerVideo(guest(null), URL, fakeYouTube({ pages: [page("z", 1, null)] }));
+  });
+});
+
+describe("ログインユーザーとアプリ全体の1日の上限（要件定義書3.2、14.2）", () => {
+  afterAll(cleanup);
+
+  it(`ログインユーザーは、1人につき24時間に${USER_DAILY_VIDEO_LIMIT}回まで`, async () => {
+    const u = await user();
+    // 存在しない動画でも、YouTube に問い合わせた回数として数える（ゲストの IP単位の上限と同じ）
+    for (let i = 0; i < USER_DAILY_VIDEO_LIMIT; i++) {
+      await expectVideoError(
+        registerVideo(u, URL, fakeYouTube({ video: null, pages: [] })),
+        "video_not_found",
+      );
+    }
+    await expectVideoError(
+      registerVideo(u, URL, fakeYouTube({ pages: [page("u1", 1, null)] })),
+      "user_daily_limit",
+    );
+
+    // 別のユーザーなら登録できる
+    await registerVideo(await user(), URL, fakeYouTube({ pages: [page("u2", 1, null)] }));
+  });
+
+  it(`アプリ全体では、24時間に${SERVICE_DAILY_VIDEO_LIMIT}回まで（ゲストもログインユーザーも止まる）`, async () => {
+    // 手元の確認で登録した分も数えられるので、今の回数を数えて、上限までの残りを記録として足す。
+    const since = ago(24 * HOUR_MS);
+    const { count, error } = await admin
+      .from("api_usage_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("endpoint", "videos.list")
+      .gte("created_at", since);
+    if (error) throw error;
+    const missing = Math.max(0, SERVICE_DAILY_VIDEO_LIMIT - (count ?? 0));
+    if (missing > 0) {
+      // guest_id を付けておくと、cleanup() で消える（後のテストに影響しない）。
+      const fillerGuestId = newGuestId();
+      const fill = await admin.from("api_usage_logs").insert(
+        Array.from({ length: missing }, () => ({
+          service: "youtube",
+          endpoint: "videos.list",
+          succeeded: true,
+          guest_id: fillerGuestId,
+        })),
+      );
+      if (fill.error) throw fill.error;
+    }
+
+    await expectVideoError(
+      registerVideo(await user(), URL, fakeYouTube({ pages: [page("s1", 1, null)] })),
+      "service_daily_limit",
+    );
+    await expectVideoError(
+      registerVideo(guest(), URL, fakeYouTube({ pages: [page("s2", 1, null)] })),
+      "service_daily_limit",
+    );
   });
 });
 
