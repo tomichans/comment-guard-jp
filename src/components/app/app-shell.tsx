@@ -36,22 +36,67 @@ export function useApp(): AppState {
   return state;
 }
 
+// 左の枠を閉じているかを、ブラウザに覚えさせるときの名前。
+const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
+
 export function AppShell({ viewer, children }: { viewer: Viewer; children: React.ReactNode }) {
   // key：ログイン・ログアウトで閲覧者が変わったら、前の人の動画一覧を残さず作り直す。
   const key = viewer.kind === "user" ? viewer.userId : "guest";
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
+
+  // 幅の決め方（要件定義書4.1）：
+  // - 左：開いているときは 18rem（288px）、閉じているときは 3.5rem（56px）の細い帯。
+  // - 右：画面の幅から、左と、中央の本文の最大幅（48rem = 768px。余白を含む）を引いた残り。
+  //   ただし 20rem（320px）より狭くせず、40rem（640px）より広くしない（1行が長すぎると読みにくいため）。
+  // - 中央：その残り。本文は最大768pxで、それより広いときは左右の余白になる。
+  const sidebarWidth = collapsed ? "3.5rem" : "18rem";
+  const insightsWidth = `clamp(20rem, calc(100vw - ${sidebarWidth} - 48rem), 40rem)`;
+
   return (
     <AppProvider key={key} viewer={viewer}>
       <div className="flex h-screen">
-        <aside className="flex w-72 shrink-0 flex-col border-r bg-sidebar">
-          <VideoSidebar />
+        <aside
+          className="flex shrink-0 flex-col border-r bg-sidebar"
+          style={{ width: sidebarWidth }}
+        >
+          <VideoSidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
         </aside>
         <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
-        <aside className="w-80 shrink-0 overflow-y-auto border-l">
+        <aside className="shrink-0 overflow-y-auto border-l" style={{ width: insightsWidth }}>
           <InsightsPane />
         </aside>
       </div>
     </AppProvider>
   );
+}
+
+/**
+ * 左の枠を閉じているか。再読み込みしても同じ状態になるよう、ブラウザ（localStorage）に覚えさせる。
+ * サーバーではブラウザの記録を読めないので、最初は「開いている」で描画し、画面を開いた後に記録を読む。
+ * 記録を読めない環境（プライベートウィンドウなど）では、いつも「開いている」から始める。
+ */
+function useSidebarCollapsed(): [boolean, (value: boolean) => void] {
+  const [collapsed, setCollapsedState] = useState(false);
+
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- サーバーでは読めない記録を、画面を開いた後に1回だけ反映する
+      if (window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1") setCollapsedState(true);
+    } catch {
+      // 読めなければ、開いたまま
+    }
+  }, []);
+
+  const setCollapsed = useCallback((value: boolean) => {
+    setCollapsedState(value);
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, value ? "1" : "0");
+    } catch {
+      // 覚えられなくても、今の画面では切り替わる
+    }
+  }, []);
+
+  return [collapsed, setCollapsed];
 }
 
 function AppProvider({ viewer, children }: { viewer: Viewer; children: React.ReactNode }) {
