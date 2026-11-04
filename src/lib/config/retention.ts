@@ -16,6 +16,13 @@ export const GUEST_RETENTION_HOURS = 24;
 /** ログインユーザーの動画の保持期間（日） */
 export const USER_RETENTION_DAYS = 29;
 
+/**
+ * API使用量の記録（api_usage_logs）の保持期間（日）【確定】（要件定義書17.2）。
+ * YouTube のデータではないので、動画とは別の期間。利用上限の判定には直近24時間しか使わないが、
+ * 費用の振り返りに使えるよう、少し長めに残す。
+ */
+export const USAGE_LOG_RETENTION_DAYS = 90;
+
 const HOUR_MS = 60 * 60 * 1000;
 
 export type OwnerKind = "user" | "guest";
