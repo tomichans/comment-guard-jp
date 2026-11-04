@@ -320,7 +320,12 @@ function Threads({
           .then((page) => {
             if (!alive.current) return;
             onGroup(page);
-            setThreads((previous) => [...previous, ...page.threads]);
+            // 分析中は、読み込みの合間に新しく分析されたコメントが一覧の途中に入り、位置（offset）がずれて、
+            // 同じスレッドが次のページにも出ることがある。すでに表示しているスレッドは足さない（key の重複を防ぐ）。
+            setThreads((previous) => {
+              const shown = new Set(previous.map((t) => t.id));
+              return [...previous, ...page.threads.filter((t) => !shown.has(t.id))];
+            });
             setTotal(page.total);
             setNextOffset(page.nextOffset);
           })
