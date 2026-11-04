@@ -1,6 +1,6 @@
 "use client";
 
-import { PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
+import { FileText, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -19,13 +19,19 @@ export function VideoSidebar({ collapsed, onToggle }: { collapsed: boolean; onTo
 
   if (collapsed) {
     return (
-      <div className="flex flex-col items-center gap-2 py-3">
+      <div className="flex flex-1 flex-col items-center gap-2 py-3">
         <Button variant="ghost" size="icon" onClick={onToggle} aria-label="動画一覧を開く" title="動画一覧を開く">
           <PanelLeftOpen />
         </Button>
         <Button asChild variant="ghost" size="icon">
           <Link href="/" aria-label="新しい動画" title="新しい動画">
             <Plus />
+          </Link>
+        </Button>
+        {/* 閉じていても、利用規約・プライバシーポリシーをいつでも開けるようにする（要件定義書18.3） */}
+        <Button asChild variant="ghost" size="icon" className="mt-auto">
+          <Link href="/terms" aria-label="利用規約・プライバシーポリシー" title="利用規約・プライバシーポリシー">
+            <FileText />
           </Link>
         </Button>
       </div>
@@ -88,8 +94,23 @@ export function VideoSidebar({ collapsed, onToggle }: { collapsed: boolean; onTo
             </Button>
           </div>
         )}
+        <LegalLinks />
       </div>
     </>
+  );
+}
+
+/** 利用規約・プライバシーポリシーへのリンク（要件定義書18.3。左の枠の下に、いつも出す） */
+function LegalLinks() {
+  return (
+    <nav className="mt-3 flex justify-center gap-4 text-xs text-muted-foreground" aria-label="規約">
+      <Link href="/terms" className="underline-offset-4 hover:underline">
+        利用規約
+      </Link>
+      <Link href="/privacy" className="underline-offset-4 hover:underline">
+        プライバシーポリシー
+      </Link>
+    </nav>
   );
 }
 

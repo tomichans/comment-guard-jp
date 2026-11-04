@@ -56,6 +56,19 @@ export function AuthForm({
             </div>
             {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
             {state?.message && <p className="text-sm">{state.message}</p>}
+            {!isLogin && (
+              <p className="text-xs text-muted-foreground">
+                登録すると、
+                <Link href="/terms" className="underline underline-offset-4">
+                  利用規約
+                </Link>
+                と
+                <Link href="/privacy" className="underline underline-offset-4">
+                  プライバシーポリシー
+                </Link>
+                に同意したものとみなします。
+              </p>
+            )}
             <Button type="submit" disabled={pending}>
               {isLogin ? "ログインする" : "登録する"}
             </Button>
