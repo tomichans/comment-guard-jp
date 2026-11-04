@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -13,15 +13,36 @@ import { useApp, type Video } from "./app-shell";
 import { Thumbnail } from "./thumbnail";
 
 // 左の枠（要件定義書4.2）：「＋新しい動画」、動画一覧、ログイン状態
-export function VideoSidebar() {
+// ChatGPT のように折りたためる。閉じているときは、開くボタンと「＋新しい動画」だけの細い帯にする。
+export function VideoSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { viewer, videos } = useApp();
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-3">
+        <Button variant="ghost" size="icon" onClick={onToggle} aria-label="動画一覧を開く" title="動画一覧を開く">
+          <PanelLeftOpen />
+        </Button>
+        <Button asChild variant="ghost" size="icon">
+          <Link href="/" aria-label="新しい動画" title="新しい動画">
+            <Plus />
+          </Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <>
       <div className="flex flex-col gap-3 p-3">
-        <Link href="/" className="px-1 text-lg font-semibold">
-          CommentGuard JP
-        </Link>
+        <div className="flex items-center justify-between gap-2">
+          <Link href="/" className="truncate px-1 text-lg font-semibold">
+            CommentGuard JP
+          </Link>
+          <Button variant="ghost" size="icon" onClick={onToggle} aria-label="動画一覧を閉じる" title="動画一覧を閉じる">
+            <PanelLeftClose />
+          </Button>
+        </div>
         <Button asChild variant="outline" className="justify-start">
           <Link href="/">
             <Plus />
