@@ -99,6 +99,23 @@ function UrlForm({ onGuestLimit }: { onGuestLimit: () => void }) {
           ? `分析結果は最長${USER_RETENTION_DAYS}日間保存され、その後自動的に削除されます`
           : `ゲストとして利用中：分析結果は${GUEST_RETENTION_HOURS}時間で自動的に削除されます。アカウント登録すると、複数の動画を最長${USER_RETENTION_DAYS}日間保存できます`}
       </p>
+      {/*
+        ゲストは登録画面を通らないので、ここで規約への同意を示す（要件定義書18.3）。
+        ログインユーザーは、登録画面で同意している。
+      */}
+      {viewer.kind === "guest" && (
+        <p className="text-center text-xs text-muted-foreground">
+          「分析する」を押すと、
+          <Link href="/terms" className="underline underline-offset-4">
+            利用規約
+          </Link>
+          と
+          <Link href="/privacy" className="underline underline-offset-4">
+            プライバシーポリシー
+          </Link>
+          に同意したものとみなします。
+        </p>
+      )}
     </div>
   );
 }
