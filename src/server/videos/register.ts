@@ -3,7 +3,9 @@ import "server-only";
 import {
   GUEST_DAILY_VIDEO_LIMIT,
   GUEST_MAX_THREADS,
+  SERVICE_DAILY_VIDEO_LIMIT,
   THREADS_PER_PAGE,
+  USER_DAILY_VIDEO_LIMIT,
   USER_MAX_THREADS,
 } from "@/lib/config/limits";
 import { isExpired } from "@/lib/config/retention";
@@ -20,7 +22,8 @@ import { youtubeApi, type YouTubeApi } from "@/server/youtube/client";
 //
 // 流れ
 //   1. URL を検証して動画IDを取り出す
-//   2. ゲストなら上限を確認する（同時に1本、IP単位の1日あたりの回数）
+//   2. 上限を確認する（ゲストは同時に1本と IP単位の1日あたりの回数、ログインユーザーは1人1日あたりの回数、
+//      どちらもアプリ全体の1日あたりの回数）
 //   3. YouTube から動画情報を取得する
 //   4. YouTube から最新のコメント（最大100スレッド）を取得する
 //   5. videos とコメントを保存する
@@ -60,7 +63,10 @@ export async function registerVideo(
   const admin = createAdminClient();
   if (registrant.kind === "guest") {
     await assertGuestCanRegister(admin, registrant, now);
+  } else {
+    await assertUserCanRegister(admin, registrant, now);
   }
+  await assertServiceCanRegister(admin, now);
 
   // 動画の内部 id を先に決めておき、保存前の API 呼び出しも、この動画の使用量として記録する。
   const ctx: UsageContext = {
@@ -209,18 +215,51 @@ async function assertGuestCanRegister(
   }
 
   if (guest.ipHash) {
-    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-    const { count, error: countError } = await admin
-      .from("api_usage_logs")
-      .select("id", { count: "exact", head: true })
-      .eq("ip_hash", guest.ipHash)
-      .eq("endpoint", "videos.list")
-      .gte("created_at", since);
-    if (countError) throw countError;
-    if ((count ?? 0) >= GUEST_DAILY_VIDEO_LIMIT) {
-      throw new VideoError("guest_daily_limit");
-    }
+    const count = await countRecentRegistrations(admin, now, { ip_hash: guest.ipHash });
+    if (count >= GUEST_DAILY_VIDEO_LIMIT) throw new VideoError("guest_daily_limit");
   }
+}
+
+/** ログインユーザー1人あたりの1日の上限（要件定義書3.2）を確認する。 */
+async function assertUserCanRegister(
+  admin: AdminClient,
+  user: Extract<Registrant, { kind: "user" }>,
+  now: Date,
+): Promise<void> {
+  const count = await countRecentRegistrations(admin, now, { user_id: user.userId });
+  if (count >= USER_DAILY_VIDEO_LIMIT) throw new VideoError("user_daily_limit");
+}
+
+/**
+ * アプリ全体の1日の上限（要件定義書14.2）を確認する。
+ * 同時に何件も登録されると、数えてから記録するまでの間に、上限をわずかに超えることがある。
+ * 費用の目安としての上限なので、そこまでは厳密にしない（OpenAI 側の利用額の上限が最後の歯止め）。
+ */
+async function assertServiceCanRegister(admin: AdminClient, now: Date): Promise<void> {
+  const count = await countRecentRegistrations(admin, now, {});
+  if (count >= SERVICE_DAILY_VIDEO_LIMIT) throw new VideoError("service_daily_limit");
+}
+
+/**
+ * 直近24時間に、動画を登録しようとした回数（YouTube に動画情報を問い合わせた回数）を数える。
+ * filter で、IP（ゲスト）やユーザーで絞り込む。空なら全体。
+ */
+async function countRecentRegistrations(
+  admin: AdminClient,
+  now: Date,
+  filter: { ip_hash?: string; user_id?: string },
+): Promise<number> {
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  let query = admin
+    .from("api_usage_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("endpoint", "videos.list")
+    .gte("created_at", since);
+  if (filter.ip_hash) query = query.eq("ip_hash", filter.ip_hash);
+  if (filter.user_id) query = query.eq("user_id", filter.user_id);
+  const { count, error } = await query;
+  if (error) throw error;
+  return count ?? 0;
 }
 
 async function youtubeSourceId(admin: AdminClient): Promise<string> {

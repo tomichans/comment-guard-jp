@@ -4,6 +4,7 @@ import { purgeExpiredVideos } from "@/server/purge-expired";
 
 import {
   DAY_MS,
+  admin,
   HOUR_MS,
   ago,
   cleanup,
@@ -26,6 +27,8 @@ describe("期限切れ削除ジョブ", () => {
   let userAlive: string;
   let userOlderThanGuestPeriod: string;
   let result: Awaited<ReturnType<typeof purgeExpiredVideos>>;
+  let usageExpired: string;
+  let usageAlive: string;
 
   beforeAll(async () => {
     const user = await createTestUser();
@@ -53,6 +56,18 @@ describe("期限切れ削除ジョブ", () => {
     await insertChildren(guestAlive);
     await insertChildren(userAlive);
 
+    // API使用量の記録（保持期間は90日）。guest_id を付けておくと、残った行は cleanup() で消える。
+    const usageGuestId = newGuestId();
+    const usage = await admin
+      .from("api_usage_logs")
+      .insert([
+        { service: "youtube", endpoint: "videos.list", succeeded: true, guest_id: usageGuestId, created_at: ago(90 * DAY_MS + MINUTE_MS, now) },
+        { service: "youtube", endpoint: "videos.list", succeeded: true, guest_id: usageGuestId, created_at: ago(90 * DAY_MS - MINUTE_MS, now) },
+      ])
+      .select("id");
+    if (usage.error) throw usage.error;
+    [usageExpired, usageAlive] = usage.data.map((r) => r.id);
+
     result = await purgeExpiredVideos(now);
   });
 
@@ -79,9 +94,19 @@ describe("期限切れ削除ジョブ", () => {
     }
   });
 
+  it("API使用量の記録は、90日を超えたものが削除され、90日以内のものは残る", async () => {
+    const { data, error } = await admin
+      .from("api_usage_logs")
+      .select("id")
+      .in("id", [usageExpired, usageAlive]);
+    if (error) throw error;
+    expect(data.map((r) => r.id)).toEqual([usageAlive]);
+  });
+
   it("削除件数を返す", () => {
     // 他のテストの残りがあっても壊れないよう、最低件数で確かめる。
     expect(result.guestVideos).toBeGreaterThanOrEqual(1);
     expect(result.userVideos).toBeGreaterThanOrEqual(1);
+    expect(result.usageLogs).toBeGreaterThanOrEqual(1);
   });
 });

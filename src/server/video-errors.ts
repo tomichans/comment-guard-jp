@@ -1,6 +1,9 @@
 import "server-only";
 
-import { GUEST_DAILY_VIDEO_LIMIT } from "@/lib/config/limits";
+import {
+  GUEST_DAILY_VIDEO_LIMIT,
+  USER_DAILY_VIDEO_LIMIT,
+} from "@/lib/config/limits";
 
 // =============================================================
 // 動画の登録・コメント取得のエラー（要件定義書15.1）【確定】
@@ -35,7 +38,7 @@ export const VIDEO_ERRORS = {
     status: 502,
     message: "YouTubeからの取得に失敗しました。時間をおいて再度お試しください",
   },
-  // このアプリの上限（要件定義書3.1）
+  // このアプリの上限（要件定義書3.1、3.2、14.2）
   guest_video_limit: {
     status: 409,
     message: "ゲストは同時に1本までです。複数の動画を分析するには、無料でアカウント登録してください",
@@ -43,6 +46,14 @@ export const VIDEO_ERRORS = {
   guest_daily_limit: {
     status: 429,
     message: `ゲストが1日に分析できる動画の数（${GUEST_DAILY_VIDEO_LIMIT}本）に達しました。無料でアカウント登録すると、続けて分析できます`,
+  },
+  user_daily_limit: {
+    status: 429,
+    message: `1日に分析できる動画の数（${USER_DAILY_VIDEO_LIMIT}本）に達しました。時間をおいて再度お試しください`,
+  },
+  service_daily_limit: {
+    status: 503,
+    message: "アプリ全体の1日の利用上限に達しました。時間をおいて再度お試しください",
   },
 } as const;
 

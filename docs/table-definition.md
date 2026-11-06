@@ -254,7 +254,7 @@ CHECK (
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 
 - 初期データは `supabase/seed.sql` で管理する（このファイルには実データを載せない）。
-- 有効／無効の管理（`is_active` など）は【未決定】。
+- 有効／無効の管理（`is_active` など）は【確定】：持たない。使わなくなった語は、行を削除する（要件定義書9.2）。
 
 ### 5.6 advice_logs（アドバイス生成履歴）
 
@@ -290,7 +290,7 @@ CHECK (
 | `created_at` | timestamptz | yes |  | レコード作成日時 |
 
 - Supabase Authとの同期方式は【確定】：DBトリガー（`on_auth_user_created`）。`auth.users` へのINSERT時に、`public.users` の行（`id` のみ。`role` は既定値の `'user'`）を自動で作成する。理由は要件定義書13.2。
-- 追加のプロフィール項目は【未決定】。
+- 追加のプロフィール項目は【確定】：MVPでは追加しない（要件定義書3.2）。
 
 ### 5.8 sources（媒体情報）
 
@@ -329,7 +329,8 @@ CHECK (
 | `created_at` | timestamptz | yes |  | レコード作成日時（＝呼び出し時刻） |
 
 - 1回のAPI呼び出しにつき1行。
-- 期限切れ削除ジョブの対象外（YouTubeのデータを含まないため）。保持期間は【未決定】。
+- 動画の期限切れ削除の対象外（YouTubeのデータを含まないため）。保持期間は90日【確定】（定数 `USAGE_LOG_RETENTION_DAYS`）で、同じ削除ジョブが `created_at` で削除する（要件定義書17.2）。
+- 利用上限の判定に使う【確定】：直近24時間の `endpoint = 'videos.list'` の行を、ゲストは `ip_hash` で、ログインユーザーは `user_id` で、アプリ全体は絞り込まずに数える（要件定義書14.2）。
 - RLSは有効で、ポリシーなし（サーバー専用）。
 
 
@@ -434,10 +435,7 @@ PostgREST（supabase-js）のクエリでは書きにくい集計・検索を、
 
 ### 8.1 未決定
 
-- `ng_words` の有効／無効の管理
-- `users` の追加のプロフィール項目
 - `videos` の追加項目（`fetch_status` 以外）
-- `api_usage_logs` の保持期間
 
 ### 8.2 要確認
 
