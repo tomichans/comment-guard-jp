@@ -1,0 +1,580 @@
+{
+  "video_title": "ふわとろ親子丼の作り方｜10分でできる簡単レシピ",
+  "comments": [
+    {
+      "id": "h01",
+      "text": "つまらん。消えろ",
+      "expected": "harmful",
+      "note": "NGワード（severity=5）で、AIを通さずに要注意"
+    },
+    {
+      "id": "h02",
+      "text": "は？意味不明。卵は半熟にしたらだめ。火を通しきれ。",
+      "expected": "harmful",
+      "note": "苛立ち＋命令口調（中身は役に立つ指摘）"
+    },
+    {
+      "id": "h03",
+      "text": "センスない。素人以下の盛り付け",
+      "expected": "harmful",
+      "note": "見下す言い方"
+    },
+    {
+      "id": "h04",
+      "text": "さすがプロ（笑）こんな簡単なこともできないんだ",
+      "expected": "harmful",
+      "note": "嫌味・皮肉"
+    },
+    {
+      "id": "h05",
+      "text": "皆べた褒めだけど、正直普通の親子丼だよね",
+      "expected": "harmful",
+      "note": "他の視聴者の評価をまとめて否定"
+    },
+    {
+      "id": "h06",
+      "text": "鶏肉の火の通りが甘いと食中毒になるよ。鵜呑みにする人がいるんだから、ちゃんと調べてから出してね",
+      "expected": "harmful",
+      "note": "上から目線の説教（中身は役に立つ指摘）"
+    },
+    {
+      "id": "h07",
+      "text": "声がうざい。BGMで聞こえないし",
+      "expected": "harmful",
+      "note": "NGワード（severity=1）＋突き放す言い方"
+    },
+    {
+      "id": "h08",
+      "text": "こんなの料理って言わないでしょw",
+      "expected": "harmful",
+      "note": "「w」で茶化す"
+    },
+    {
+      "id": "h09",
+      "text": "何回同じ失敗してるの？学習しないね",
+      "expected": "harmful",
+      "note": "見下す言い方（質問の形）"
+    },
+    {
+      "id": "h10",
+      "text": "ゴミみたいな動画だな",
+      "expected": "harmful",
+      "note": "NGワード（severity=3）"
+    },
+    {
+      "id": "h11",
+      "text": "お前の顔見たくないから手元だけ映せ",
+      "expected": "harmful",
+      "note": "侮辱＋命令口調"
+    },
+    {
+      "id": "h12",
+      "text": "家まで行ってやろうか",
+      "expected": "harmful",
+      "note": "脅迫（NGワードなし）"
+    },
+    {
+      "id": "h13",
+      "text": "話にならない。だしの取り方から勉強し直して",
+      "expected": "harmful",
+      "note": "頭ごなしの否定"
+    },
+    {
+      "id": "h14",
+      "text": "ひねくれすぎかね？でも、この量で10分は無理でしょ笑 盛りすぎ",
+      "expected": "harmful",
+      "note": "前置き＋「笑」で茶化す"
+    },
+    {
+      "id": "h15",
+      "text": "信者しかいないコメント欄で草",
+      "expected": "harmful",
+      "note": "他の視聴者を冷ややかに見る"
+    },
+    {
+      "id": "h16",
+      "text": "きもい喋り方やめて",
+      "expected": "harmful",
+      "note": "NGワード（severity=1）＋侮辱"
+    },
+    {
+      "id": "h17",
+      "text": "低評価押しときました。二度と見ない",
+      "expected": "harmful",
+      "note": "突き放す言い方"
+    },
+    {
+      "id": "h18",
+      "text": "レシピパクっただけで再生数稼ぐの楽でいいね",
+      "expected": "harmful",
+      "note": "嫌味"
+    },
+    {
+      "id": "h19",
+      "text": "砂糖入れすぎ。舌バカなの？",
+      "expected": "harmful",
+      "note": "侮辱（中身は役に立つ指摘）"
+    },
+    {
+      "id": "h20",
+      "text": "いい加減にしろよ、毎回タイトル詐欺",
+      "expected": "harmful",
+      "note": "苛立ちをぶつける"
+    },
+    {
+      "id": "s01",
+      "text": "私のチャンネルでも親子丼作ってます！見に来てね→ youtube.com/@example",
+      "expected": "spam",
+      "note": "自分のチャンネルの宣伝"
+    },
+    {
+      "id": "s02",
+      "text": "副業で月30万稼げる方法をプロフィールに載せています",
+      "expected": "spam",
+      "note": "勧誘"
+    },
+    {
+      "id": "s03",
+      "text": "【無料】LINE登録で今だけギフト券プレゼント！",
+      "expected": "spam",
+      "note": "勧誘"
+    },
+    {
+      "id": "s04",
+      "text": "相互登録お願いします！登録したらコメントください",
+      "expected": "spam",
+      "note": "相互登録の依頼"
+    },
+    {
+      "id": "s05",
+      "text": "この調味料、公式サイトで半額セール中です→ example.com/sale",
+      "expected": "spam",
+      "note": "商品の宣伝"
+    },
+    {
+      "id": "s06",
+      "text": "投資で人生変わりました。詳しくは固定ツイートへ",
+      "expected": "spam",
+      "note": "勧誘"
+    },
+    {
+      "id": "s07",
+      "text": "チャンネル登録者1000人目指してます！応援お願いします🙏 料理系やってます",
+      "expected": "spam",
+      "note": "自分のチャンネルの宣伝（遠回し）"
+    },
+    {
+      "id": "s08",
+      "text": "DM待ってます💕 プロフ見てね",
+      "expected": "spam",
+      "note": "誘導"
+    },
+    {
+      "id": "f01",
+      "text": "BGMが少し大きくて、説明の声が聞き取りにくかったです。もう少し下げてもらえると嬉しいです",
+      "expected": "feedback",
+      "note": "丁寧な要望"
+    },
+    {
+      "id": "f02",
+      "text": "材料の分量を画面に字幕で出してもらえると助かります",
+      "expected": "feedback",
+      "note": "丁寧な要望"
+    },
+    {
+      "id": "f03",
+      "text": "4:26あたり、玉ねぎを入れるタイミングが説明と映像で違っている気がします",
+      "expected": "feedback",
+      "note": "誤りの指摘"
+    },
+    {
+      "id": "f04",
+      "text": "手元が暗くて卵の固まり具合が見えにくかったので、照明を明るくしてほしいです",
+      "expected": "feedback",
+      "note": "丁寧な要望"
+    },
+    {
+      "id": "f05",
+      "text": "とても分かりやすかったです！次は2人分の分量も教えてもらえると嬉しいです",
+      "expected": "feedback",
+      "note": "ポジティブ＋要望（要望が優先）"
+    },
+    {
+      "id": "f06",
+      "text": "みりんの量が概要欄と動画で違うようです（大さじ1と大さじ2）",
+      "expected": "feedback",
+      "note": "誤りの指摘"
+    },
+    {
+      "id": "f07",
+      "text": "カメラが少し揺れていたので、三脚を使うともっと見やすくなると思います",
+      "expected": "feedback",
+      "note": "改善の提案"
+    },
+    {
+      "id": "f08",
+      "text": "説明が少し早口に感じました。もう少しゆっくり話してもらえると助かります",
+      "expected": "feedback",
+      "note": "否定的な感想＋要望（要望が優先）"
+    },
+    {
+      "id": "f09",
+      "text": "完成までの時間を最初に出してもらえると、作るか決めやすいです",
+      "expected": "feedback",
+      "note": "丁寧な要望"
+    },
+    {
+      "id": "f10",
+      "text": "いつも参考にしています。調理器具のリンクを概要欄に貼ってもらえませんか",
+      "expected": "feedback",
+      "note": "質問の形の要望"
+    },
+    {
+      "id": "f11",
+      "text": "火加減を「中火」だけでなく、目安の音や見た目でも教えてもらえると初心者にはありがたいです",
+      "expected": "feedback",
+      "note": "丁寧な要望"
+    },
+    {
+      "id": "f12",
+      "text": "鶏もも肉と書いてありますが、映像はむね肉に見えました。どちらでしょうか",
+      "expected": "feedback",
+      "note": "誤りの指摘＋質問（指摘が優先）"
+    },
+    {
+      "id": "f13",
+      "text": "字幕の色が背景と同じで読みにくいところがありました",
+      "expected": "feedback",
+      "note": "改善の指摘"
+    },
+    {
+      "id": "f14",
+      "text": "最後の盛り付けをもう少し長く映してほしかったです",
+      "expected": "feedback",
+      "note": "丁寧な要望"
+    },
+    {
+      "id": "f15",
+      "text": "美味しそうでした！ただ、卵の溶き方を省略せずに見せてもらえると嬉しいです",
+      "expected": "feedback",
+      "note": "ポジティブ＋要望（要望が優先）"
+    },
+    {
+      "id": "q01",
+      "text": "使っているフライパンはどこのものですか？",
+      "expected": "question"
+    },
+    {
+      "id": "q02",
+      "text": "鶏肉の代わりに豚肉でも作れますか？",
+      "expected": "question"
+    },
+    {
+      "id": "q03",
+      "text": "めんつゆを使う場合はどれくらい入れればいいですか",
+      "expected": "question",
+      "note": "「？」なし"
+    },
+    {
+      "id": "q04",
+      "text": "冷凍保存はできますか？",
+      "expected": "question"
+    },
+    {
+      "id": "q05",
+      "text": "卵は何個使っていますか？",
+      "expected": "question"
+    },
+    {
+      "id": "q06",
+      "text": "だしは顆粒でも大丈夫ですか？",
+      "expected": "question"
+    },
+    {
+      "id": "q07",
+      "text": "子どもが食べるなら砂糖は減らしたほうがいいでしょうか",
+      "expected": "question"
+    },
+    {
+      "id": "q08",
+      "text": "玉ねぎを入れない場合、何か代わりになるものはありますか",
+      "expected": "question",
+      "note": "「？」なし"
+    },
+    {
+      "id": "q09",
+      "text": "美味しそう！ご飯は何合炊いていますか？",
+      "expected": "question",
+      "note": "ポジティブ＋質問（質問が優先）"
+    },
+    {
+      "id": "q10",
+      "text": "一人用の小さい鍋でも作れますか",
+      "expected": "question",
+      "note": "「？」なし"
+    },
+    {
+      "id": "q11",
+      "text": "三つ葉が手に入らないとき、何をのせるのがおすすめですか",
+      "expected": "question"
+    },
+    {
+      "id": "q12",
+      "text": "このどんぶりの器、どこで買えますか",
+      "expected": "question"
+    },
+    {
+      "id": "q13",
+      "text": "作り置きして次の日に食べても美味しいですか",
+      "expected": "question"
+    },
+    {
+      "id": "q14",
+      "text": "片栗粉は入れていますか？とろみの付け方が知りたいです",
+      "expected": "question"
+    },
+    {
+      "id": "q15",
+      "text": "MサイズとLサイズ、どちらの卵を使っていますか",
+      "expected": "question"
+    },
+    {
+      "id": "p01",
+      "text": "めちゃくちゃ美味しそう！今日の夜ご飯これにします",
+      "expected": "praise"
+    },
+    {
+      "id": "p02",
+      "text": "説明が丁寧で、初心者でも作れました。家族に好評でした",
+      "expected": "praise"
+    },
+    {
+      "id": "p03",
+      "text": "卵のとろとろ具合が最高です",
+      "expected": "praise"
+    },
+    {
+      "id": "p04",
+      "text": "いつも癒されています。声が落ち着いていて好きです",
+      "expected": "praise"
+    },
+    {
+      "id": "p05",
+      "text": "10分でこのクオリティはすごい",
+      "expected": "praise"
+    },
+    {
+      "id": "p06",
+      "text": "作ってみました！本当にふわとろになりました、ありがとうございます",
+      "expected": "praise"
+    },
+    {
+      "id": "p07",
+      "text": "編集が見やすくてテンポがいいですね",
+      "expected": "praise"
+    },
+    {
+      "id": "p08",
+      "text": "親子丼ってこんなに簡単に作れるんだ…感動",
+      "expected": "praise"
+    },
+    {
+      "id": "p09",
+      "text": "どんな味がするんだろう、早く食べてみたいな",
+      "expected": "praise",
+      "note": "答えを求めない独り言（質問ではない）"
+    },
+    {
+      "id": "p10",
+      "text": "この動画のおかげで料理が好きになりました",
+      "expected": "praise"
+    },
+    {
+      "id": "p11",
+      "text": "盛り付けがきれいで、お店みたい",
+      "expected": "praise"
+    },
+    {
+      "id": "p12",
+      "text": "毎回楽しみにしています！",
+      "expected": "praise"
+    },
+    {
+      "id": "p13",
+      "text": "BGMの選曲がおしゃれで好きです",
+      "expected": "praise"
+    },
+    {
+      "id": "p14",
+      "text": "失敗しがちなポイントを先に言ってくれるのが助かります",
+      "expected": "praise"
+    },
+    {
+      "id": "p15",
+      "text": "今まで見た親子丼の動画でいちばん分かりやすかった",
+      "expected": "praise"
+    },
+    {
+      "id": "n01",
+      "text": "前回の動画のほうが分かりやすかったです",
+      "expected": "negative_opinion",
+      "note": "丁寧な否定的意見"
+    },
+    {
+      "id": "n02",
+      "text": "個人的には、もう少し甘さ控えめのほうが好みでした",
+      "expected": "negative_opinion",
+      "note": "丁寧な否定的意見"
+    },
+    {
+      "id": "n03",
+      "text": "私が作ったら、少ししょっぱく感じました",
+      "expected": "negative_opinion",
+      "note": "丁寧な否定的意見"
+    },
+    {
+      "id": "n04",
+      "text": "今回はいつもより説明が少なく感じました",
+      "expected": "negative_opinion",
+      "note": "丁寧な否定的意見"
+    },
+    {
+      "id": "n05",
+      "text": "これ本当に10分でできるのかな？",
+      "expected": "negative_opinion",
+      "note": "疑いを込めた反語（質問ではない）"
+    },
+    {
+      "id": "n06",
+      "text": "残念ながら、私の家族には味が濃いと言われてしまいました",
+      "expected": "negative_opinion",
+      "note": "丁寧な否定的意見"
+    },
+    {
+      "id": "n07",
+      "text": "最近は手の込んだ料理が少なくて、少しさみしいです",
+      "expected": "negative_opinion",
+      "note": "丁寧な否定的意見"
+    },
+    {
+      "id": "n08",
+      "text": "卵が半熟すぎて、私は少し苦手でした",
+      "expected": "negative_opinion",
+      "note": "丁寧な否定的意見"
+    },
+    {
+      "id": "n09",
+      "text": "タイトルの「簡単」は、初心者には少し難しく感じました",
+      "expected": "negative_opinion",
+      "note": "丁寧な否定的意見"
+    },
+    {
+      "id": "n10",
+      "text": "動画が長くて、途中で見るのをやめてしまいました",
+      "expected": "negative_opinion",
+      "note": "丁寧な否定的意見"
+    },
+    {
+      "id": "n11",
+      "text": "思っていた親子丼とは違いました",
+      "expected": "negative_opinion",
+      "note": "丁寧な否定的意見"
+    },
+    {
+      "id": "n12",
+      "text": "正直、味は普通でした",
+      "expected": "negative_opinion",
+      "note": "境界の例（きつい言い方とまでは言えない）"
+    },
+    {
+      "id": "o01",
+      "text": "親子丼って、鶏と卵だから親子なんですね",
+      "expected": "other",
+      "note": "豆知識"
+    },
+    {
+      "id": "o02",
+      "text": "うちの近所の定食屋も親子丼が名物です",
+      "expected": "other",
+      "note": "雑談"
+    },
+    {
+      "id": "o03",
+      "text": "地域によっては玉ねぎじゃなくて長ねぎを使うって聞いたことある",
+      "expected": "other",
+      "note": "豆知識（質問ではない）"
+    },
+    {
+      "id": "o04",
+      "text": "初見です",
+      "expected": "other",
+      "note": "雑談"
+    },
+    {
+      "id": "o05",
+      "text": "今日は雨ですね",
+      "expected": "other",
+      "note": "動画と無関係"
+    },
+    {
+      "id": "o06",
+      "text": "2回目の視聴です",
+      "expected": "other",
+      "note": "雑談"
+    },
+    {
+      "id": "o07",
+      "text": "1:23 猫の鳴き声が聞こえた笑",
+      "expected": "other",
+      "note": "雑談（「笑」だが発信者を茶化していない）"
+    },
+    {
+      "id": "o08",
+      "text": "親子丼の日って何月何日なんだろう",
+      "expected": "other",
+      "note": "答えを求めない独り言（質問ではない）"
+    },
+    {
+      "id": "o09",
+      "text": "明日から仕事だ〜",
+      "expected": "other",
+      "note": "動画と無関係"
+    },
+    {
+      "id": "o10",
+      "text": "コメント一番乗り！",
+      "expected": "other",
+      "note": "雑談"
+    },
+    {
+      "id": "o11",
+      "text": "おすすめに出てきました",
+      "expected": "other",
+      "note": "雑談"
+    },
+    {
+      "id": "o12",
+      "text": "鶏肉って部位によって値段が全然違うよね",
+      "expected": "other",
+      "note": "豆知識"
+    },
+    {
+      "id": "o13",
+      "text": "これ見ながら筋トレしてます",
+      "expected": "other",
+      "note": "雑談"
+    },
+    {
+      "id": "o14",
+      "text": "関西だと親子丼に山椒をかける人もいるらしい",
+      "expected": "other",
+      "note": "豆知識"
+    },
+    {
+      "id": "o15",
+      "text": "テスト期間中なのに見てしまった",
+      "expected": "other",
+      "note": "雑談"
+    }
+  ]
+}
