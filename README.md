@@ -6,9 +6,7 @@ YouTube のコメントを AI で分析し、発信者が**心をすり減らさ
 - 要件定義書：[docs/requirements.md](docs/requirements.md)／テーブル定義書：[docs/table-definition.md](docs/table-definition.md)
 - 分類の評価結果：[docs/evaluation.md](docs/evaluation.md)
 
-<!-- スクリーンショット：docs/images/ に画像を置いたら、下の行のコメントを外す
 ![メイン画面（コメント一覧とランキング、AIアドバイス）](docs/images/main.png)
--->
 
 ## 何を解決するアプリか
 
