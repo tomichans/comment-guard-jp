@@ -94,6 +94,21 @@ npm run db:reset   # マイグレーションと seed を最初から適用し�
 npm run db:types   # DB の型定義 src/lib/database.types.ts を再生成する
 ```
 
+## 分類の評価
+
+コメントの分類（AI）がどれだけ正しいかを、数字で確かめる（結果は [docs/evaluation.md](docs/evaluation.md)）。
+
+- 架空のコメント100件（`eval/classification-dataset.json`）に、人が正解の分類を付けておき、本番と同じ方法（NGワード → 分類の AI → Moderation API）で分類して比べる。
+  実際の YouTube のコメントは、規約上リポジトリに保存できないため、架空のコメントにしている。
+- 正解率に加えて、**要注意の見逃し**（要注意のコメントを、他の分類にしてしまった割合）を重く見る。
+  このアプリは、コメントで心を痛めやすい発信者を守るためのもので、「見逃すより、誤って要注意にするほうがよい」という方針のため（要件定義書9.1）。
+- 本物の OpenAI を呼ぶので、`.env.local` の `OPENAI_API_KEY` と、ローカルの Supabase（NGワードを読む）が要る。費用は1回あたり数円の見込み。
+- AI の結果は毎回少し変わるので、`npm test` には入れていない。
+
+```bash
+npm run eval   # docs/evaluation.md を書き出す
+```
+
 ## ディレクトリ構成
 
 ```
