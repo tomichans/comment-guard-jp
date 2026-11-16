@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 
+import { PASSWORD_MIN_LENGTH } from "@/lib/config/auth";
 import { takeOverGuestDataOnLogin } from "@/server/migrate-guest";
 import { createSessionClient } from "@/server/supabase/server";
 
@@ -46,6 +47,11 @@ export async function signUp(
   formData: FormData,
 ): Promise<AuthFormState> {
   const { email, password } = readCredentials(formData);
+  // 画面の minLength はブラウザの開発ツールで外せるので、サーバーでも確かめる。
+  // Supabase 側も同じ最低文字数で拒否するが、ここで先に確かめると、理由の分かるメッセージを出せる。
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    return { error: `パスワードは${PASSWORD_MIN_LENGTH}文字以上で入力してください` };
+  }
   const supabase = await createSessionClient();
 
   // [Supabase固有] auth.users に行が作られ、DBトリガーで public.users も作られる
