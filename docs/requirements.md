@@ -176,6 +176,8 @@ CommentGuard JP（コメントガードJP）
 - 認証方式は【確定】：メールアドレスとパスワード（Supabase Auth）。メール確認は行わない（サインアップ後すぐにログインできる）。
   - 理由：MVPではシンプルな導線を優先するため。ローカルは `supabase/config.toml` の `enable_confirmations = false`。
   - 本番の Supabase プロジェクトでも、Authentication の Email プロバイダーで「Confirm email」を無効にすること（デプロイのスライスで設定）。
+- パスワードの最低文字数は【確定】：8文字（定数 `PASSWORD_MIN_LENGTH`。`src/lib/config/auth.ts`）。登録の画面とサーバーの両方で確かめ、Supabase の設定（ローカルは `supabase/config.toml` の `minimum_password_length`、本番は Authentication の設定）も8にそろえる。
+  - 理由：短いパスワードは総当たりで破られやすく、今の一般的な目安が8文字以上のため。当初は Supabase の既定の6文字だった（2026年11月16日に決定）。
 - プロフィール項目、権限体系の詳細は【確定】：MVPでは追加しない（`users` は今の `name`、`role` のまま。プロフィールの編集画面も作らない）。
   - 理由：MVPの機能に必要がなく、ポートフォリオとして公開する範囲では、今の項目で足りるため（2026年11月4日に決定）。
 
@@ -985,6 +987,12 @@ erDiagram
 - APIキー、アクセストークン、セッショントークンをログへ出力しない。
 - AIへ送信するコメントデータは必要最小限とし、投稿者プロフィール情報を不要にAIへ送信しない。
 - コメント本文をHTMLとして直接描画しない。
+- セキュリティ用のレスポンスヘッダーを、すべてのページと API に付ける【確定】（`next.config.ts`）。
+  - 他サイトへの埋め込みの禁止（`frame-ancestors 'none'`、`X-Frame-Options`）、ファイルの種類の推測の禁止（`X-Content-Type-Options`）、他サイトに渡す URL を最小限にする（`Referrer-Policy`）、カメラ・マイク・位置情報の禁止（`Permissions-Policy`）、HTTPS の強制（`Strict-Transport-Security`）。`X-Powered-By` は返さない。
+  - スクリプトの読み込み元まで制限する完全な CSP は入れない。理由：Next.js では nonce の仕組みが必要で設定が大きくなるため。埋め込みスクリプトの対策は、コメント本文を HTML として描画しないことで行う（2026年11月16日に決定）。
+- ログイン・サインアップの試行回数は、Supabase Auth の既定の制限（同じIPから5分に30回。`supabase/config.toml` の `sign_in_sign_ups`）に任せる。ログインの失敗時は、メールアドレスが未登録かパスワードの誤りかを区別しない。
+- デプロイの前と、デプロイした後の定期的な点検の手順は、`docs/security-checklist.md` に置く【確定】（2026年11月16日に決定）。
+- MVPでは行わないもの【確定】：CAPTCHA、2段階認証、専門家による侵入テスト、不審なアクセスの監視。理由：ポートフォリオとして公開する範囲では、外部サービスの設定や費用に見合わないため（2026年11月16日に決定）。
 
 ---
 
