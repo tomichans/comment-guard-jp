@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PASSWORD_MIN_LENGTH } from "@/lib/config/auth";
 
 import type { AuthFormState } from "./actions";
 
@@ -50,9 +51,13 @@ export function AuthForm({
                 name="password"
                 type="password"
                 autoComplete={isLogin ? "current-password" : "new-password"}
-                minLength={6}
+                // 最低文字数は登録のときだけ確かめる（ログインでは、入力された値をそのまま Supabase に確かめてもらう）。
+                minLength={isLogin ? undefined : PASSWORD_MIN_LENGTH}
                 required
               />
+              {!isLogin && (
+                <p className="text-xs text-muted-foreground">{PASSWORD_MIN_LENGTH}文字以上で入力してください</p>
+              )}
             </div>
             {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
             {state?.message && <p className="text-sm">{state.message}</p>}
