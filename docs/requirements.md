@@ -199,7 +199,8 @@ YouTubeのAPIから取得したデータは、YouTube API Services の規約に�
 - 削除方法：1時間ごとに実行する定期ジョブが、期限を超えた `videos` 行を削除する。子データは `ON DELETE CASCADE` で連鎖して削除される（13.4）。
 - スケジュール方式【確定】：Supabase の `pg_cron` と `pg_net` で、1時間ごとに API Route（`/api/cron/purge-expired`、`CRON_SECRET` で保護）を呼び出す。削除の本体は TypeScript（`src/server/purge-expired.ts`）に置く。
   - 理由：保持期間の定数を TypeScript の1か所で管理でき、テストもしやすいため。Vercel Cron は Hobby プランでは1日1回までのため採用しない。アプリが停止していてジョブが失敗しても、読み取り時の期限判定により期限切れのデータは見えない。
-  - `pg_cron` の登録は、デプロイ先のURLが決まるデプロイのスライスで行う。
+  - `pg_cron` の登録【確定】：本番の Supabase の SQL Editor で、`supabase/production/schedule-purge-expired.sql` を1回実行する（手順は `docs/deploy.md`）。公開URLと `CRON_SECRET` は、Supabase の Vault（暗号化して保存する仕組み）に入れて、ジョブから読み出す。
+    - 理由：公開URLと合言葉は本番にしかないので、マイグレーションにはしない。ジョブの SQL に合言葉を直接書くと、ジョブの一覧（`cron.job`）に平文で残るため、Vault を使う。
 - 削除の遅れへの備え：ジョブの実行前でも期限切れのデータが見えないよう、API Route でのデータ取得時にも、期限内かを判定する。期限を超えていれば「見つからない」として扱う。
 - 対象外：`users` と Supabase Auth のアカウント情報、`api_usage_logs`（YouTubeのデータではないため。`api_usage_logs` は別の期間（90日）で、同じジョブが削除する。17.2）。
 - 削除後に動画が見つからない場合、エラー表示はせず「①URL入力状態」として扱う。
@@ -1102,6 +1103,10 @@ erDiagram
   - Radix ベースにしたのは、既存コードが Radix の書き方（`asChild`）を使っているため。
 - コメント分類のLLMは【確定】：OpenAI の小型モデル（14.1）。Vercel AI SDK（`ai`、`@ai-sdk/openai`）経由で呼ぶ。
 - アドバイス生成用のLLMは【確定】：OpenAI の `gpt-6.1-sol`（14.1）。分類と同じく Vercel AI SDK 経由で呼ぶ。
+- デプロイの設定【確定】（`vercel.json`、手順は `docs/deploy.md`）：
+  - Supabase は東京（Northeast Asia (Tokyo)）、Vercel のサーバーの処理も東京（`hnd1`）で動かす。理由：Vercel の既定はアメリカ東部で、DB とのやり取りのたびに待ち時間が増えるため。
+  - Vercel の環境変数は Production だけに入れ、main 以外（Pull Request など）のビルドはしない（`ignoreCommand`）。理由：確認前のコードが、本番の DB と APIキーを使えないようにするため。
+  - 無料のプラン（Vercel Hobby、Supabase Free）で動かす（2026年11月17日に決定）。
 
 ---
 

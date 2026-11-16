@@ -46,7 +46,7 @@ CommentGuard JP は、動画の URL を入れるだけで、次のことをし�
 | AI | Vercel AI SDK、OpenAI（分類・アドバイス・Moderation・Embedding） |
 | 外部 API | YouTube Data API v3 |
 | テスト | Vitest（DB は本物のローカル Supabase、AI と YouTube は偽物に差し替え） |
-| ホスティング | Vercel（予定） |
+| ホスティング | Vercel（東京）、Supabase（東京）。手順は [docs/deploy.md](docs/deploy.md) |
 
 ## 全体の流れ
 
@@ -326,3 +326,8 @@ supabase/
   seed.sql             初期データ
 tests/                 Vitest
 ```
+
+### デプロイ
+
+Vercel と Supabase（どちらも無料のプラン）に公開する手順は [docs/deploy.md](docs/deploy.md)、
+セキュリティの点検手順は [docs/security-checklist.md](docs/security-checklist.md) にある。
