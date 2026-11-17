@@ -199,7 +199,8 @@ YouTubeのAPIから取得したデータは、YouTube API Services の規約に�
 - 削除方法：1時間ごとに実行する定期ジョブが、期限を超えた `videos` 行を削除する。子データは `ON DELETE CASCADE` で連鎖して削除される（13.4）。
 - スケジュール方式【確定】：Supabase の `pg_cron` と `pg_net` で、1時間ごとに API Route（`/api/cron/purge-expired`、`CRON_SECRET` で保護）を呼び出す。削除の本体は TypeScript（`src/server/purge-expired.ts`）に置く。
   - 理由：保持期間の定数を TypeScript の1か所で管理でき、テストもしやすいため。Vercel Cron は Hobby プランでは1日1回までのため採用しない。アプリが停止していてジョブが失敗しても、読み取り時の期限判定により期限切れのデータは見えない。
-  - `pg_cron` の登録は、デプロイ先のURLが決まるデプロイのスライスで行う。
+  - `pg_cron` の登録【確定】：本番の Supabase の SQL Editor で、`supabase/production/schedule-purge-expired.sql` を1回実行する（手順は `docs/deploy.md`）。公開URLと `CRON_SECRET` は、Supabase の Vault（暗号化して保存する仕組み）に入れて、ジョブから読み出す。
+    - 理由：公開URLと合言葉は本番にしかないので、マイグレーションにはしない。ジョブの SQL に合言葉を直接書くと、ジョブの一覧（`cron.job`）に平文で残るため、Vault を使う。
 - 削除の遅れへの備え：ジョブの実行前でも期限切れのデータが見えないよう、API Route でのデータ取得時にも、期限内かを判定する。期限を超えていれば「見つからない」として扱う。
 - 対象外：`users` と Supabase Auth のアカウント情報、`api_usage_logs`（YouTubeのデータではないため。`api_usage_logs` は別の期間（90日）で、同じジョブが削除する。17.2）。
 - 削除後に動画が見つからない場合、エラー表示はせず「①URL入力状態」として扱う。
@@ -1027,7 +1028,9 @@ erDiagram
 - 通常ログに、コメント本文全体を出力しない。
 - `api_usage_logs` の保持期間は【確定】：90日（定数 `USAGE_LOG_RETENTION_DAYS`。`src/lib/config/retention.ts`）。期限切れ削除のジョブ（3.3）が、動画と一緒に削除する。
   - 理由：利用上限の判定には直近24時間しか使わないが、費用の振り返りに使えるよう、少し長めに残す（2026年11月4日に決定）。
-- その他のログ（Vercel のログなど）の保持期間と記録先は【未決定】（デプロイのときに決める）。
+- その他のログの保持期間と記録先は【確定】：各サービスの無料のプランの範囲のまま（Vercel のログは1時間、Supabase のログは1日）。外部のログ保存サービスには送らない。
+  - 理由：利用者が少ないポートフォリオで、振り返りに要る記録（API の利用量・費用・失敗）は `api_usage_logs` に90日残るため。Vercel のログを外に送る仕組み（Drains）は有料プランだけで、費用と設定に見合わない（2026年11月17日に決定）。
+  - 不具合が起きたときは、Vercel のログが1時間で消えるので、すぐに見る（`docs/deploy.md` の「うまくいかないとき」）。
 
 ---
 
@@ -1102,6 +1105,10 @@ erDiagram
   - Radix ベースにしたのは、既存コードが Radix の書き方（`asChild`）を使っているため。
 - コメント分類のLLMは【確定】：OpenAI の小型モデル（14.1）。Vercel AI SDK（`ai`、`@ai-sdk/openai`）経由で呼ぶ。
 - アドバイス生成用のLLMは【確定】：OpenAI の `gpt-6.1-sol`（14.1）。分類と同じく Vercel AI SDK 経由で呼ぶ。
+- デプロイの設定【確定】（`vercel.json`、手順は `docs/deploy.md`）：
+  - Supabase は東京（Northeast Asia (Tokyo)）、Vercel のサーバーの処理も東京（`hnd1`）で動かす。理由：Vercel の既定はアメリカ東部で、DB とのやり取りのたびに待ち時間が増えるため。
+  - Vercel の環境変数は Production だけに入れ、main 以外（Pull Request など）のビルドはしない（`ignoreCommand`）。理由：確認前のコードが、本番の DB と APIキーを使えないようにするため。
+  - 無料のプラン（Vercel Hobby、Supabase Free）で動かす（2026年11月17日に決定）。
 
 ---
 
@@ -1111,7 +1118,6 @@ erDiagram
 
 - レート制限の値（16）。「1日あたりの動画の登録回数」は、3.1、3.2、14.2で確定
 - `videos` の追加項目（`fetch_status` 以外）（6）
-- ログ（Vercel のログなど）の保持期間と記録先（17.2）。`api_usage_logs` の保持期間は確定（90日）
 
 ### 20.2 原文に曖昧さがあり、確認が必要なもの
 
