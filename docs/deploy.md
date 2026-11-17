@@ -31,6 +31,9 @@ CommentGuard JP を、インターネットに公開する手順です。上か�
 1. [Supabase](https://supabase.com/dashboard) で **New project** を押す。
    - Name：`comment-guard-jp`
    - Database Password：**Generate a password** で作り、パスワード管理アプリなどに控える（手順2で使う）
+   - Security の3つのチェック：**Enable Data API** ON、**Automatically expose new tables** ON のまま、**Enable automatic RLS** ON
+     - Data API は、ログインや、ログインユーザーが自分の動画を読む・消す処理に要る。
+     - 「expose new tables」は、Supabase は OFF を勧めているが、このリポジトリのマイグレーションには表への権限を付ける文がないので、OFF にすると「permission denied」で動かなくなる。全部の表で RLS を有効にしてあるので、ON のままでも他人のデータは読めない。
    - Region：**Northeast Asia (Tokyo)**（アプリを動かす Vercel の地域と同じ東京にする。遠いと、DB とのやり取りのたびに待ち時間が増えるため）
    - Plan：Free
 2. 作成が終わったら、チェックリストの **1.3** を行う。
@@ -68,7 +71,14 @@ npx supabase db push --include-seed
 ```
 
 - 終わったら、Supabase の画面の **Table Editor** で、`sources` に youtube が1行、`ng_words` に10行あることを確かめる。
-- **Advisors → Security Advisor** を開き、警告がないことを確かめる（チェックリスト1.3の後半）。警告が出たら、内容を Claude に貼って相談する。
+- SQL Editor で、次を1回実行する（手順1で「Enable automatic RLS」を ON にした場合）。
+
+  ```sql
+  revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+  ```
+
+  - `rls_auto_enable()` は、そのチェックを ON にしたときに Supabase が自動で作る関数（新しい表に RLS を自動で付ける）。API から呼べる状態だと、Security Advisor が警告を2つ出す。呼べないようにしても、RLS を自動で付ける動きは変わらない。
+- **Advisors → Security Advisor** を開き（Refresh を押す）、警告がないことを確かめる（チェックリスト1.3の後半）。警告が出たら、内容を Claude に貼って相談する。
 - `--include-seed` でエラーになった場合は、`supabase/seed.sql` の中身を SQL Editor に貼って Run しても同じです。
 
 ## 3. 本番用の APIキー・秘密の値を用意する
