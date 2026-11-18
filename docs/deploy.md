@@ -78,7 +78,9 @@ npx supabase db push --include-seed
   ```
 
   - `rls_auto_enable()` は、そのチェックを ON にしたときに Supabase が自動で作る関数（新しい表に RLS を自動で付ける）。API から呼べる状態だと、Security Advisor が警告を2つ出す。呼べないようにしても、RLS を自動で付ける動きは変わらない。
-- **Advisors → Security Advisor** を開き（Refresh を押す）、警告がないことを確かめる（チェックリスト1.3の後半）。警告が出たら、内容を Claude に貼って相談する。
+- **Advisors → Security Advisor** を開き（Refresh を押す）、警告（WARN）がないことを確かめる（チェックリスト1.3の後半）。警告が出たら、内容を Claude に貼って相談する。
+  - 次の3件の情報（INFO「RLS Enabled No Policy」）は、**意図したもの**なので、対応しなくてよい：`api_usage_logs`、`ng_words`、`sources`。この3つの表は、サーバーだけが読み書きし、ブラウザからは一切読ませない。ポリシーを作らないことで「誰にも読めない」状態にしている（要件定義書13.2、16章）。
+  - `handle_new_auth_user()`（サインアップ時に `users` の行を作るトリガー用の関数）の警告2件は、マイグレーション `20261118000001_revoke_trigger_function_execute.sql` が解消する。このマイグレーションが入る前に本番へ `db push` した場合は、SQL Editor で `revoke execute on function public.handle_new_auth_user() from public, anon, authenticated;` を実行しても同じ。
 - `--include-seed` でエラーになった場合は、`supabase/seed.sql` の中身を SQL Editor に貼って Run しても同じです。
 
 ## 3. 本番用の APIキー・秘密の値を用意する

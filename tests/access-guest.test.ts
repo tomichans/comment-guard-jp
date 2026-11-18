@@ -86,4 +86,13 @@ describe("ゲストのアクセス制御", () => {
       expect(data, table).toEqual([]);
     }
   });
+
+  // [Supabase固有] public スキーマの関数は、既定では /rest/v1/rpc/関数名 として外から呼べる。
+  // トリガー用の SECURITY DEFINER 関数は、呼べないようにしてある（20261118000001）。
+  it("anon キーで、サインアップ用のトリガー関数を呼べない", async () => {
+    // 型定義（database.types.ts）に載らない関数なので、名前を型の外から渡す。
+    const { data, error } = await anonClient().rpc("handle_new_auth_user" as never);
+    expect(error).not.toBeNull();
+    expect(data).toBeNull();
+  });
 });
