@@ -1,0 +1,16 @@
+-- =============================================================
+-- トリガー用の関数を、API（/rest/v1/rpc/...）から呼べないようにする
+--
+-- 本番の Supabase の Security Advisor が、public.handle_new_auth_user()（20261013000005）について、
+-- 「ログインしていない人（anon）と、ログインユーザー（authenticated）が実行できる SECURITY DEFINER 関数」
+-- と警告した（2026年11月18日。lint 0028、0029）。
+--
+-- [Supabase固有] public スキーマの関数は、既定ですべてのロールに EXECUTE が付き、
+-- PostgREST が /rest/v1/rpc/関数名 として公開する。トリガー専用の関数は、直接呼んでもエラーになるので
+-- 実害は小さいが、外から呼べる理由がないので、EXECUTE を外す。
+--
+-- トリガー（on_auth_user_created）は、実行する人の EXECUTE 権限を見ない（権限が見られるのは、
+-- トリガーを作るとき）ので、サインアップで public.users が作られる動きは変わらない。
+-- tests/helpers/db.ts の createTestUser が、サインアップ後に public.users ができることを毎回確かめている。
+-- =============================================================
+revoke execute on function public.handle_new_auth_user() from public, anon, authenticated;
