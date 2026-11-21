@@ -116,6 +116,8 @@ npx supabase db push --include-seed
    | `OPENAI_API_KEY` | 手順3 |
 
    - `OPENAI_CLASSIFY_MODEL` と `OPENAI_ADVICE_MODEL` は入れない（空なら、コードの既定のモデルを使う）。
+   - 種類（Type）は、`NEXT_PUBLIC_` で始まる2つを **Config**、残りを **Secret** にする。`NEXT_PUBLIC_` の値はブラウザにも渡る決まりなので、Vercel は Secret にさせない（赤い警告が出る）。この2つは公開されても困らない値（安全は RLS で守っている）。Secret は保存後に値を見られず、Config には後から変えられない。
+   - `SUPABASE_SERVICE_ROLE_KEY` には、`NEXT_PUBLIC_` を付けない（ブラウザに公開されてしまう）。
    - 環境（Environments）は **Production だけ**にする。Preview にも入れると、確認前のコードが本番の DB と APIキーを使えてしまうため。
 5. **Deploy** を押す。2〜3分でビルドが終わり、`https://comment-guard-jp-xxxx.vercel.app` のような公開URLが出る。
 6. 公開URLを控える（手順5〜7と README で使う）。
@@ -172,6 +174,7 @@ YouTube の規約で、取得したデータは30日以内に消す必要があ�
 | 症状 | 見るところ |
 | --- | --- |
 | ビルドが失敗する | Vercel の Deployments → 失敗したデプロイ → Build Logs |
+| Deployments が空のまま（「No Production Deployment」）。Create Deployment や Deploy Hook でも出ない | `main` に何かマージすると、Git の連携で自動デプロイが始まる。それでも出ないときは、GitHub の Settings → Integrations → GitHub Apps → Vercel で、このリポジトリへのアクセスを許可しているか確かめる |
 | 画面が「環境変数 … が設定されていません」で止まる | Vercel の Settings → Environment Variables（入れ忘れ、Production 以外に入れた）。直したら Deployments → Redeploy |
 | 動画の登録でエラーになる | Vercel の Logs（**1時間**で消えるので、起きたらすぐ見る）。YouTube・OpenAI の APIキーの制限 |
 | ログイン・サインアップできない | Supabase の Authentication の設定（手順1、5） |
