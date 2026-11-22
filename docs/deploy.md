@@ -43,7 +43,7 @@ CommentGuard JP を、インターネットに公開する手順です。上か�
 
    | 控える値 | 画面での名前 | Vercel での変数名 |
    | --- | --- | --- |
-   | プロジェクトのURL | Project URL（Project Settings → Data API など） | `NEXT_PUBLIC_SUPABASE_URL` |
+   | プロジェクトのURL | Project URL（Project Settings → Data API など）。**`https://<project-ref>.supabase.co` だけ**にし、後ろの `/rest/v1` や `/` は付けない | `NEXT_PUBLIC_SUPABASE_URL` |
    | 公開用の鍵 | **Publishable key**（`sb_publishable_…`）。Legacy タブの `anon` でもよい | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
    | 管理用の鍵 | **Secret key**（`sb_secret_…`）。Legacy タブの `service_role` でもよい | `SUPABASE_SERVICE_ROLE_KEY` |
 
@@ -178,6 +178,7 @@ YouTube の規約で、取得したデータは30日以内に消す必要があ�
 | Deployments が空のまま（「No Production Deployment」）。Create Deployment や Deploy Hook でも出ない | `main` に何かマージすると、Git の連携で自動デプロイが始まる。それでも出ないときは、GitHub の Settings → Integrations → GitHub Apps → Vercel で、このリポジトリへのアクセスを許可しているか確かめる |
 | 画面が「環境変数 … が設定されていません」で止まる | Vercel の Settings → Environment Variables（入れ忘れ、Production 以外に入れた）。直したら Deployments → Redeploy |
 | 動画の登録でエラーになる | Vercel の Logs（**1時間**で消えるので、起きたらすぐ見る）。YouTube・OpenAI の APIキーの制限 |
+| Supabase とのやり取りで `PGRST125`（Invalid path specified in request URL） | `NEXT_PUBLIC_SUPABASE_URL` の末尾に `/rest/v1` などが付いている。`https://<project-ref>.supabase.co` だけにして、Redeploy する |
 | ログイン・サインアップできない | Supabase の Authentication の設定（手順1、5） |
 
 ログの残る期間：Vercel の Logs は1時間、Supabase のログは1日です（無料プラン）。API の利用量と費用、失敗した呼び出しは `api_usage_logs` に90日残ります（要件定義書17.2）。
