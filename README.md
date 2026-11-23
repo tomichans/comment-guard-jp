@@ -2,7 +2,8 @@
 
 YouTube のコメントを AI で分析し、発信者が**心をすり減らさずに**コメントを読めるようにする、日本語特化の Web アプリです。
 
-- 公開 URL：（デプロイ後に追記）
+- 公開 URL：https://comment-guard-jp.vercel.app/
+  - PC のブラウザ（画面の幅 1280px 以上）向けです。ログインなし（ゲスト）でも、1日5本まで試せます。
 - 要件定義書：[docs/requirements.md](docs/requirements.md)／テーブル定義書：[docs/table-definition.md](docs/table-definition.md)
 - 分類の評価結果：[docs/evaluation.md](docs/evaluation.md)
 
